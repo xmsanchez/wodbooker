@@ -10,8 +10,8 @@ import calendar
 
 
 class LoginForm(form.Form):
-    email = fields.StringField(validators=[validators.required()])
-    password = fields.PasswordField(validators=[validators.required()])
+    email = fields.StringField(validators=[validators.DataRequired()])
+    password = fields.PasswordField(validators=[validators.DataRequired()])
 
     def validate_email(self, field):
         user = self.get_user()
@@ -29,8 +29,8 @@ class LoginForm(form.Form):
 
 
 class RegistrationForm(form.Form):
-    email = fields.StringField(validators=[validators.required()])
-    password = fields.PasswordField(validators=[validators.required()])
+    email = fields.StringField(validators=[validators.DataRequired()])
+    password = fields.PasswordField(validators=[validators.DataRequired()])
 
     def validate_email(self, field):
         if db.session.query(User).filter_by(email=self.email.data).count() > 0:
