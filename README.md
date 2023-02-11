@@ -1,4 +1,4 @@
-# Wodbooster
+# Wodbuster AutoBooker
 
 Autobooking app for Wodbuster.com
 
