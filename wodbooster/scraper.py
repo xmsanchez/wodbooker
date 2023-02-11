@@ -27,9 +27,9 @@ class Scraper():
                 '__VIEWSTATE': '',
                 'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$IoMobileAppId': '',
                 'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$IoMobileIdFireBase': '',
-                'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$IoEmail': username,
-                'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$IoPassword': password,
-                'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$CtlEntrar': 'Entrar'}
+                'ctl00$ctl00$ctl00$ctl00$body$body$body$body$IoEmail': username,
+                'ctl00$ctl00$ctl00$ctl00$body$body$body$body$IoPassword': password,
+                'ctl00$ctl00$ctl00$ctl00$body$body$body$body$CtlEntrar': 'Entrar'}
 
         request = self.session.post(login_url, data=data)
 
