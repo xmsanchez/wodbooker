@@ -6,3 +6,4 @@ Flask-Admin==1.5.8
 Flask-SQLAlchemy==2.5.1
 Flask-Login==0.6.2
 markupsafe==2.0.1
+requests==2.28.2
