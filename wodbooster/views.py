@@ -106,7 +106,7 @@ class BookingAdmin(sqla.ModelView):
     form = BookingForm
 
     column_labels = dict(dow='Day of the week')
-    column_list = ('dow', 'time', 'booked_at', 'user.email')
+    column_list = ('dow', 'time', 'booked_at')
 
     def get_list(self, *args, **kwargs):
         count, data = super(BookingAdmin, self).get_list(*args, **kwargs)
