@@ -1,6 +1,6 @@
 import os
 import os.path as op
-from flask import Flask
+from flask import Flask, redirect
 from flask_sqlalchemy import SQLAlchemy
 
 from flask_admin import Admin
@@ -49,7 +49,7 @@ def init_login():
 
 @app.route('/')
 def index():
-    return '<a href="/admin/">Click me to get to Admin!</a>'
+    return redirect('/admin')
 
 init_login()
 
