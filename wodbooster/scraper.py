@@ -14,9 +14,10 @@ class Scraper():
 
     def login(self, username, password):
         self.session = requests.Session()
+        self.headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 Edg/118.0.2088.46"}
         login_path = '/account/login.aspx?ReturnUrl=%2Fuser%2F'
         login_url = self.url + login_path
-        request = self.session.get(login_url)
+        request = self.session.get(login_url, headers=self.headers)
 
         soup = BeautifulSoup(request.content, 'lxml')
         viewstatec = soup.find(id='__VIEWSTATEC')['value']
@@ -31,7 +32,7 @@ class Scraper():
                 'ctl00$ctl00$ctl00$ctl00$body$body$body$body$IoPassword': password,
                 'ctl00$ctl00$ctl00$ctl00$body$body$body$body$CtlEntrar': 'Entrar'}
 
-        request = self.session.post(login_url, data=data)
+        request = self.session.post(login_url, data=data, headers=self.headers)
 
         if request.status_code != 200:
             raise Exception('Something went wrong during login')
@@ -49,14 +50,14 @@ class Scraper():
         day = datetime.datetime(date.year, date.month, date.day)
         hour = date.strftime('%H:%M:%S')
         t = (str(t_base + int((day - first_day).total_seconds())) + right_pad)
-        response = self.session.get(booking_url % t)
+        response = self.session.get(booking_url % t, headers=self.headers)
         classes = response.json()['Data']
         for _class in classes:
             if _class['Hora'] == hour:
                 # Let's book it!
                 _id = _class['Valores'][0]['Valor']['Id']
                 response = self.session.get(
-                    self.url + '/athlete/handlers/Calendario_Inscribir.ashx?id=%s&ticks=%s' % (_id, t))
+                    self.url + '/athlete/handlers/Calendario_Inscribir.ashx?id=%s&ticks=%s' % (_id, t), headers=self.headers)
                 if response.status_code == 200:
                     return response.json()['Res']['EsCorrecto']
 
