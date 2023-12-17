@@ -1,8 +1,6 @@
 import requests
 import datetime
 from bs4 import BeautifulSoup
-import http.client
-import re
 
 
 class Scraper():
@@ -12,30 +10,64 @@ class Scraper():
         self.url = url
         self.logged = False
 
+    @staticmethod
+    def lookup_header_value(text, header_name):
+        index = text.index(header_name)
+        return text[index + len(header_name) + 1:].split("|")[0]
+
     def login(self, username, password):
         self.session = requests.Session()
         self.headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 Edg/118.0.2088.46"}
-        login_path = '/account/login.aspx?ReturnUrl=%2Fuser%2F'
-        login_url = self.url + login_path
+        box_name = self.url.split("/")[2].split(".")[0]
+        login_url = f"https://wodbuster.com/account/login.aspx?cb={box_name}&ReturnUrl={self.url}%2fuser%2fdefault.aspx"
         request = self.session.get(login_url, headers=self.headers)
 
         soup = BeautifulSoup(request.content, 'lxml')
         viewstatec = soup.find(id='__VIEWSTATEC')['value']
+        eventvalidation = soup.find(id='__EVENTVALIDATION')['value']
+        csrftoken = soup.find(id='CSRFToken')['value']
 
-        data = {'__VIEWSTATEC': viewstatec,
+        data = {'ctl00$ctl00$body$ctl00': 'ctl00%24ctl00%24body%24ctl00%7Cctl00%24ctl00%24body%24body%24CtlLogin%24CtlAceptar',
+                'CSRFToken': csrftoken,
                 '__EVENTTARGET': '',
                 '__EVENTARGUMENT': '',
+                '__VIEWSTATEC': viewstatec,
                 '__VIEWSTATE': '',
-                'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$IoMobileAppId': '',
-                'ctl00$ctl00$ctl00$ctl00$ctl00$body$body$body$body$body$IoMobileIdFireBase': '',
-                'ctl00$ctl00$ctl00$ctl00$body$body$body$body$IoEmail': username,
-                'ctl00$ctl00$ctl00$ctl00$body$body$body$body$IoPassword': password,
-                'ctl00$ctl00$ctl00$ctl00$body$body$body$body$CtlEntrar': 'Entrar'}
+                '__EVENTVALIDATION': eventvalidation,
+                'ctl00$ctl00$body$body$CtlLogin$IoTri': '',
+                'ctl00$ctl00$body$body$CtlLogin$IoTrg': '',
+                'ctl00$ctl00$body$body$CtlLogin$IoTra': '',
+                'ctl00$ctl00$body$body$CtlLogin$IoEmail': username,
+                'ctl00$ctl00$body$body$CtlLogin$IoPassword': password,
+                'ctl00$ctl00$body$body$CtlLogin$cIoUid': '',
+                '__ASYNCPOST': 'true',
+                'ctl00$ctl00$body$body$CtlLogin$CtlAceptar': 'Aceptar\n'}
 
         request = self.session.post(login_url, data=data, headers=self.headers)
 
         if request.status_code != 200:
             raise Exception('Something went wrong during login')
+
+        viewstatec_confirm = self.lookup_header_value(request.text, '__VIEWSTATEC')
+        eventvalidation_confirm = self.lookup_header_value(request.text, '__EVENTVALIDATION')
+
+        data_confirm = {
+            'ctl00$ctl00$body$ctl00': 'ctl00%24ctl00%24body%24ctl00%7Cctl00%24ctl00%24body%24body%24CtlConfiar%24CtlSeguro',
+            'CSRFToken': csrftoken,
+            '__EVENTTARGET': '',
+            '__EVENTARGUMENT': '',
+            '__VIEWSTATEC': viewstatec_confirm,
+            '__VIEWSTATE': '',
+            '__EVENTVALIDATION': eventvalidation_confirm,
+            '__ASYNCPOST': 'true',
+            'ctl00$ctl00$body$body$CtlConfiar$CtlSeguro': 'Recordar\n'}
+
+        request_confirm = self.session.post(login_url, data=data_confirm, headers=self.headers)
+
+        if request_confirm.status_code != 200:
+            raise Exception('Something went wrong during login')
+
+
         self.logged = True
 
     def book(self, date):
