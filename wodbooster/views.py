@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, request
+from flask import Flask, redirect, url_for, request, flash
 from wtforms import form, fields, validators, widgets
 from flask_admin.form.fields import TimeField
 import flask_login as login
@@ -6,6 +6,7 @@ from flask_admin import Admin, AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
 from werkzeug.security import generate_password_hash, check_password_hash
 from .models import User, db
+from .scraper import Scraper
 import calendar
 
 
@@ -114,8 +115,33 @@ class BookingAdmin(sqla.ModelView):
             item.dow = calendar.day_name[item.dow]
         return count, data
 
+    def get_query(self):
+        query = super().get_query()
+        query = query.filter_by(user_id=login.current_user.id)
+        return query
+    
+    def get_one(self, id):
+        result = super().get_one(id)
+        if result.user_id != login.current_user.id:
+            return None
+        return result
+
     def is_accessible(self):
         return login.current_user.is_authenticated
+    
+    def update_model(self, form, model):
+        if login.current_user.is_authenticated and model.user_id != login.current_user.id:
+            # raise ValueError("No tienes permiso para editar este elemento.")
+            flash("No tienes permiso para editar este elemento.", "warning")  # Mensaje de advertencia
+            return False
+        return super().update_model(form, model)
+
+    def delete_model(self, model):
+        if login.current_user.is_authenticated and model.user_id != login.current_user.id:
+            # raise ValueError("No tienes permiso para eliminar este elemento.")
+            flash("No tienes permiso para eliminar este elemento.", "warning")
+            return False
+        return super().delete_model(model)
 
     def inaccessible_callback(self, name, **kwargs):
         # redirect to login page if user doesn't have access
