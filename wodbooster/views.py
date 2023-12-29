@@ -131,13 +131,13 @@ class BookingAdmin(sqla.ModelView):
     
     def update_model(self, form, model):
         if login.current_user.is_authenticated and model.user_id != login.current_user.id:
-            flash("No tienes permiso para editar este elemento.", "warning")  # Mensaje de advertencia
+            flash("You are not authorized to edit this element", "warning")  # Mensaje de advertencia
             return False
         return super().update_model(form, model)
 
     def delete_model(self, model):
         if login.current_user.is_authenticated and model.user_id != login.current_user.id:
-            flash("No tienes permiso para eliminar este elemento.", "warning")
+            flash("You are not authorized to delete this element", "warning")
             return False
         return super().delete_model(model)
 
