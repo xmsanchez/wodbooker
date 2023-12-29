@@ -1,12 +1,17 @@
 import datetime
 import pickle
+import json
 import requests
 from bs4 import BeautifulSoup
 from .exceptions import LoginError, InvalidWodBusterAPIResponse, NotLoggedUser
+import sseclient
+
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
 }
+
+_SSE_SERVER = "https://sr-2-0.wodbuster.com"
 
 
 class Scraper():
@@ -16,6 +21,7 @@ class Scraper():
 
     def __init__(self, url, user):
         self.url = url
+        self._box_name = self.url.split("/")[2].split(".")[0]
         self.logged = False
         self._session = None
         self.user = user
@@ -45,8 +51,7 @@ class Scraper():
         Login the user into WodBuster
         """
         self._session = requests.Session()
-        box_name = self.url.split("/")[2].split(".")[0]
-        login_url = f"https://wodbuster.com/account/login.aspx?cb={box_name}&ReturnUrl={self.url}%2fuser%2fdefault.aspx"
+        login_url = f"https://wodbuster.com/account/login.aspx?cb={self._box_name}&ReturnUrl={self.url}%2fuser%2fdefault.aspx"
         initial_request = self._session.get(login_url, headers=_HEADERS)
 
         soup = BeautifulSoup(initial_request.content, 'lxml')
@@ -142,3 +147,27 @@ class Scraper():
             raise InvalidWodBusterAPIResponse('WodBuster returned a non JSON response') from e
         except requests.exceptions.RequestException as e:
             raise InvalidWodBusterAPIResponse('WodBuster returned a non expected response') from e
+
+    def get_subscription(self, date):
+        """ Get notifications for a given date """
+        negotiate_request = self._session.post(f"{_SSE_SERVER}/bookinghub/negotiate?negotiateVersion=1",
+                                               headers=_HEADERS)
+        connection_token = negotiate_request.json()["connectionToken"]
+        headers = {**_HEADERS, **{"Accept": "text/event-stream"}}
+        booking_hub_request = self._session.get(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
+                                                stream=True, headers=headers)
+
+        self._send_sse_command(connection_token, {"protocol":"json","version":1})
+        epoch = int(datetime.datetime.combine(date, datetime.datetime.min.time()).timestamp())
+        self._send_sse_command(connection_token, {"arguments": [self._box_name, str(epoch)],
+                                                  "invocationId":"0",
+                                                  "target":"JoinRoom",
+                                                  "type":1})
+
+        return sseclient.SSEClient(booking_hub_request)
+
+    def _send_sse_command(self, connection_token, command):
+        headers = {**_HEADERS, **{"Content-Type": "text/plain"}}
+        command_str = json.dumps(command) + "\u001e"
+        self._session.post(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
+                           data=command_str, headers=headers)

@@ -15,6 +15,7 @@ app = Flask(__name__)
 
 # Commands
 app.cli.add_command(book)
+app.cli.add_command(subscribe_to_events)
 
 # Create dummy secrey key so we can use sessions
 app.config['SECRET_KEY'] = '123456790'

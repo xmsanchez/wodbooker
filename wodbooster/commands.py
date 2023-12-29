@@ -1,10 +1,11 @@
 import datetime
+import json
 from collections import defaultdict
 import click
 from flask.cli import with_appcontext
 from sqlalchemy import or_, and_
 
-from .models import Booking, db
+from .models import Booking, db, User
 from .scraper import Scraper
 from .exceptions import NotLoggedUser, InvalidWodBusterAPIResponse, LoginError
 
@@ -49,3 +50,21 @@ def book(offset, url='https://contact.wodbuster.com'):
             print(f'Impossible to book classes for {user.email}. Login failed')
         
     db.session.commit()
+
+
+@click.command()
+@click.argument('date')
+@click.argument('url')
+@with_appcontext
+def subscribe_to_events(date, url='https://contact.wodbuster.com'):
+    user = db.session.query(User).first()
+    scraper = Scraper(url, user)
+    with scraper:
+        date = datetime.datetime.strptime(date, '%d/%m/%Y').date()
+        client = scraper.get_subscription(date)
+
+        for event in client.events():
+            data = json.loads(event.data[:-1])
+            if "type" not in data or data["type"] != 6:
+                current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                print(f"{current_time} - {event.data}")
