@@ -33,21 +33,19 @@ def book(offset, url='https://contact.wodbuster.com'):
             with scraper:
                 for booking in bookings_by_user[user]:
                     day = today + datetime.timedelta(days=dow_map[booking.dow])
-                    book_day_str = day.strftime('%d/%m/%Y %H:%M')
+                    time = datetime.time(booking.time.hour, booking.time.minute, 0)
+                    booking_time = datetime.datetime.combine(day, time)
+                    booking_date_str = booking_time.strftime('%d/%m/%Y %H:%M')
                     try:
-                        result = scraper.book(datetime.datetime(
-                            day.year, day.month, day.day, booking.time.hour, booking.time.minute, 0))
+                        result = scraper.book(booking_time)
                         if result:
                             booking.booked_at = today
-                            print(f'Booking for user {user.email} at {book_day_str} completed successfully')
+                            print(f'Booking for user {user.email} at {booking_date_str} completed successfully')
                     except NotLoggedUser:
                         print(f'Impossible to book classes for {user.email}. User is not logged')
                     except InvalidWodBusterAPIResponse:
-                        print(f'Impossible to book classes for {user.email} for {book_day_str}. Invalid response from WodBuster')
+                        print(f'Impossible to book classes for {user.email} for {booking_date_str}. Invalid response from WodBuster')
         except LoginError:
             print(f'Impossible to book classes for {user.email}. Login failed')
         
     db.session.commit()
-    
-    if len(bookings) == 0:
-        print('All set')
