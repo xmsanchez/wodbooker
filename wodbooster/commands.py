@@ -37,7 +37,6 @@ def book(offset, url='https://contact.wodbuster.com'):
                     try:
                         result = scraper.book(datetime.datetime(
                             day.year, day.month, day.day, booking.time.hour, booking.time.minute, 0))
-                        result = False
                         if result:
                             booking.booked_at = today
                             print(f'Booking for user {user.email} at {book_day_str} completed successfully')

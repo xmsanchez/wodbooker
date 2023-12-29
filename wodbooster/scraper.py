@@ -114,26 +114,21 @@ class Scraper():
         if not self.logged:
             raise NotLoggedUser('This action requires to be logged')
 
-        classes, ticks = self.get_classes(date)
+        classes, epoch = self.get_classes(date)
         hour = date.strftime('%H:%M:%S')
 
         for _class in classes:
             if _class['Hora'] == hour:
                 _id = _class['Valores'][0]['Valor']['Id']
-                book_result = self._book_request(f'{self.url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={ticks}')
+                book_result = self._book_request(f'{self.url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
                 return book_result['Res']['EsCorrecto']
 
         return False
 
     def get_classes(self, date):
-        """ Get the classes for a given date """
-        t_base = 63741340800
-        first_day = datetime.datetime(2020, 11, 19)
-        right_pad = '0000000'
-        day = datetime.datetime(date.year, date.month, date.day)
-        ticks = (str(t_base + int((day - first_day).total_seconds())) + right_pad)
-
-        return self._book_request(f'{self.url}/athlete/handlers/LoadClass.ashx?ticks={ticks}')['Data'], ticks
+        """ Get the classes for a given epoch """
+        epoch = int(date.timestamp())
+        return self._book_request(f'{self.url}/athlete/handlers/LoadClass.ashx?ticks={epoch}')['Data'], epoch
 
     def _book_request(self, url):
         try:
