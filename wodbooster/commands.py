@@ -22,7 +22,7 @@ def book(offset, url='https://contact.wodbuster.com'):
     bookings = list(db.session.query(Booking).filter(
         and_(
             or_(
-                Booking.booked_at < (today - datetime.timedelta(days=int(offset))),
+                Booking.booked_at != today,
                 Booking.booked_at == None),
             Booking.dow.in_(dows),
             or_(
@@ -30,7 +30,7 @@ def book(offset, url='https://contact.wodbuster.com'):
                 Booking.available_at < datetime.datetime.now()
             ))
         ).all())
-    
+
     bookings_by_user = defaultdict(list)
     for booking in bookings:
         bookings_by_user[booking.user].append(booking)
