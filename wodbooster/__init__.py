@@ -23,7 +23,7 @@ app.config['SECRET_KEY'] = '123456790'
 app.config['DATABASE_FILE'] = 'db.sqlite'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
     app.config['DATABASE_FILE']
-app.config['SQLALCHEMY_ECHO'] = True
+app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Build a sample db on the fly, if one does not exist yet.
