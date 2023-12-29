@@ -6,7 +6,7 @@ from sqlalchemy import or_, and_
 
 from .models import Booking, db
 from .scraper import Scraper
-from .exceptions import NotLoggedUser, InvalidWodBusterAPIResponse, LoginError
+from .exceptions import NotLoggedUser, InvalidWodBusterAPIResponse, LoginError, BookingNotAvailable
 
 
 @click.command()
@@ -19,8 +19,17 @@ def book(offset, url='https://contact.wodbuster.com'):
     dow = today.weekday()
     dows = [(dow + i) % 7 for i in list(range(int(offset) + 1))]
     dow_map = dict(zip(dows, list(range(int(offset) + 1))))
-    bookings = list(db.session.query(Booking).filter(and_(or_(Booking.booked_at < (
-        today - datetime.timedelta(days=int(offset))), Booking.booked_at == None), Booking.dow.in_(dows))).all())
+    bookings = list(db.session.query(Booking).filter(
+        and_(
+            or_(
+                Booking.booked_at < (today - datetime.timedelta(days=int(offset))),
+                Booking.booked_at == None),
+            Booking.dow.in_(dows),
+            or_(
+                Booking.available_at == None,
+                Booking.available_at < datetime.datetime.now()
+            ))
+        ).all())
     
     bookings_by_user = defaultdict(list)
     for booking in bookings:
@@ -40,7 +49,11 @@ def book(offset, url='https://contact.wodbuster.com'):
                         result = scraper.book(booking_time)
                         if result:
                             booking.booked_at = today
+                            booking.available_at = None
                             print(f'Booking for user {user.email} at {booking_date_str} completed successfully')
+                    except BookingNotAvailable as e:
+                        print(f'Booking for user {user.email} at {booking_date_str} is not available yet. Bookings are opened at {e.available_at}')
+                        booking.available_at = e.available_at
                     except NotLoggedUser:
                         print(f'Impossible to book classes for {user.email}. User is not logged')
                     except InvalidWodBusterAPIResponse:

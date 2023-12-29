@@ -2,7 +2,7 @@ import datetime
 import pickle
 import requests
 from bs4 import BeautifulSoup
-from .exceptions import LoginError, InvalidWodBusterAPIResponse, NotLoggedUser
+from .exceptions import LoginError, InvalidWodBusterAPIResponse, NotLoggedUser, BookingNotAvailable
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
@@ -117,7 +117,11 @@ class Scraper():
         classes, epoch = self.get_classes(date)
         hour = date.strftime('%H:%M:%S')
 
-        for _class in classes:
+        if not classes['Data'] and classes["PrimeraHoraPublicacion"]:
+            avaiable_at = datetime.datetime.strptime(classes["PrimeraHoraPublicacion"], '%m/%d/%Y %H:%M:%S')
+            raise BookingNotAvailable('No classes available', avaiable_at)
+
+        for _class in classes['Data']:
             if _class['Hora'] == hour:
                 _id = _class['Valores'][0]['Valor']['Id']
                 book_result = self._book_request(f'{self.url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
@@ -128,7 +132,7 @@ class Scraper():
     def get_classes(self, date):
         """ Get the classes for a given epoch """
         epoch = int(date.timestamp())
-        return self._book_request(f'{self.url}/athlete/handlers/LoadClass.ashx?ticks={epoch}')['Data'], epoch
+        return self._book_request(f'{self.url}/athlete/handlers/LoadClass.ashx?ticks={epoch}'), epoch
 
     def _book_request(self, url):
         try:

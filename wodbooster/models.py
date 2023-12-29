@@ -10,6 +10,7 @@ class Booking(db.Model):
     booked_at = db.Column(db.Date)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User')
+    available_at = db.Column(db.DateTime)
 
 
 class User(db.Model):
