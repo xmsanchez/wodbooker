@@ -44,6 +44,8 @@ class Scraper():
     def _login(self, username, password):
         """
         Login the user into WodBuster
+        :param username: WodBuster username
+        :param password: WodBuster password
         """
         self._session = requests.Session()
         box_name = self.url.split("/")[2].split(".")[0]
@@ -111,7 +113,11 @@ class Scraper():
         return text[index + len(header_name) + 1:].split("|")[0]
 
     def book(self, date):
-        """ Book a date, return True if the action was successful otherwise False """
+        """ 
+        Book a date, return True if the action was successful otherwise False 
+        :param date: The date and time when the class has to be booked
+        :return: True if the action was successful otherwise False
+        """
         if not self.logged:
             raise NotLoggedUser('This action requires to be logged')
 
@@ -133,7 +139,12 @@ class Scraper():
         return False
 
     def get_classes(self, date):
-        """ Get the classes for a given epoch """
+        """ 
+        Get the classes for a given epoch
+        :param date: The date of the classes to retrieve
+        :return: A tuple. The first element is the response from WodBuster API for the specified date. 
+        The second element is the date in epoch format in case is useful for other operations
+        """
         epoch = int(date.timestamp())
         return self._book_request(f'{self.url}/athlete/handlers/LoadClass.ashx?ticks={epoch}'), epoch
 

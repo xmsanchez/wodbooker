@@ -15,6 +15,11 @@ from .exceptions import NotLoggedUser, InvalidWodBusterAPIResponse, LoginError, 
 @click.argument('url')
 @with_appcontext
 def book(offset, url='https://contact.wodbuster.com'):
+    """
+    Initiate the booking process
+    :param offset: Number of days from today to book
+    :param url: WodBuster URL
+    """
 
     if int(offset) > 6:
         raise click.BadParameter('Offset must be between 0 and 6')
