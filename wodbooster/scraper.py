@@ -117,8 +117,10 @@ class Scraper():
         classes, epoch = self.get_classes(date)
         hour = date.strftime('%H:%M:%S')
 
-        if not classes['Data'] and classes["PrimeraHoraPublicacion"]:
-            avaiable_at = datetime.datetime.strptime(classes["PrimeraHoraPublicacion"], '%m/%d/%Y %H:%M:%S')
+        if not classes['Data']:
+            avaiable_at = None
+            if "PrimeraHoraPublicacion" in classes:
+                avaiable_at = datetime.datetime.strptime(classes["PrimeraHoraPublicacion"], '%m/%d/%Y %H:%M:%S')
             raise BookingNotAvailable('No classes available', avaiable_at)
 
         for _class in classes['Data']:
