@@ -25,8 +25,8 @@ def book(offset, url='https://contact.wodbuster.com'):
     bookings = list(db.session.query(Booking).filter(
         and_(
             or_(
-                Booking.booked_at != today,
-                Booking.booked_at == None),
+                Booking.last_book_date < today,
+                Booking.last_book_date == None),
             Booking.dow.in_(dows),
             or_(
                 Booking.available_at == None,
@@ -51,8 +51,9 @@ def book(offset, url='https://contact.wodbuster.com'):
                     try:
                         result = scraper.book(booking_time)
                         if result:
-                            booking.booked_at = today
+                            booking.booked_at = datetime.datetime.now().replace(microsecond=0)
                             booking.available_at = None
+                            booking.last_book_date = day
                             print(f'Booking for user {user.email} at {booking_date_str} completed successfully')
                     except BookingNotAvailable as e:
                         print(f'Booking for user {user.email} at {booking_date_str} is not available yet. Bookings are opened at {e.available_at}')

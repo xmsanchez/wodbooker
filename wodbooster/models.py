@@ -7,11 +7,11 @@ class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     dow = db.Column(db.Integer)
     time = db.Column(db.Time)
-    booked_at = db.Column(db.Date)
+    booked_at = db.Column(db.DateTime)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User')
     available_at = db.Column(db.DateTime)
-
+    last_book_date = db.Column(db.Date)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
