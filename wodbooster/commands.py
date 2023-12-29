@@ -1,4 +1,5 @@
 import datetime
+import logging
 from collections import defaultdict
 import click
 from flask.cli import with_appcontext
@@ -54,15 +55,15 @@ def book(offset, url='https://contact.wodbuster.com'):
                             booking.booked_at = datetime.datetime.now().replace(microsecond=0)
                             booking.available_at = None
                             booking.last_book_date = day
-                            print(f'Booking for user {user.email} at {booking_date_str} completed successfully')
+                            logging.info(f'Booking for user {user.email} at {booking_date_str} completed successfully')
                     except BookingNotAvailable as e:
-                        print(f'Booking for user {user.email} at {booking_date_str} is not available yet. Bookings are opened at {e.available_at}')
+                        logging.info(f'Booking for user {user.email} at {booking_date_str} is not available yet. Bookings are opened at {e.available_at}')
                         booking.available_at = e.available_at
                     except NotLoggedUser:
-                        print(f'Impossible to book classes for {user.email}. User is not logged')
+                        logging.warn(f'Impossible to book classes for {user.email}. User is not logged')
                     except InvalidWodBusterAPIResponse:
-                        print(f'Impossible to book classes for {user.email} for {booking_date_str}. Invalid response from WodBuster')
+                        logging.warn(f'Impossible to book classes for {user.email} for {booking_date_str}. Invalid response from WodBuster')
         except LoginError:
-            print(f'Impossible to book classes for {user.email}. Login failed')
+            logging.warn(f'Impossible to book classes for {user.email}. Login failed')
         
     db.session.commit()

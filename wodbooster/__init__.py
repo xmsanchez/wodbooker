@@ -1,5 +1,6 @@
 import os
 import os.path as op
+import logging
 from flask import Flask, redirect
 from flask_sqlalchemy import SQLAlchemy
 
@@ -9,6 +10,9 @@ from flask_admin.contrib import sqla
 from .views import MyAdminIndexView, BookingAdmin
 from .models import User, Booking, db
 from .commands import *
+
+# Configure logging
+logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
 
 # Create application
 app = Flask(__name__)

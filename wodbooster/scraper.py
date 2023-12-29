@@ -1,5 +1,6 @@
 import datetime
 import pickle
+import logging
 import requests
 from bs4 import BeautifulSoup
 from .exceptions import LoginError, InvalidWodBusterAPIResponse, NotLoggedUser, BookingNotAvailable
@@ -22,19 +23,19 @@ class Scraper():
 
     def __enter__(self):
         if self.user.cookie:
-            print(f"Attempt to use cookies for user {self.user.email}")
+            logging.info("Attempt to use cookies for user %s", self.user.email)
             self._session = requests.Session()
             self._session.cookies.update(pickle.loads(self.user.cookie))
 
             try:
                 self.get_classes(datetime.datetime.now())
                 self.logged = True
-                print("Cookies Valid!")
+                logging.info("Cookies Valid!")
             except InvalidWodBusterAPIResponse:
-                print("Cookies Invalid!")
+                logging.info("Cookies Invalid!")
                 self._login(self.user.email, self.user.password)
         else:
-            print(f"Cookies not set for user {self.user.email}. Logging in...")
+            logging.info("Cookies not set for user %s. Logging in...", self.user.email)
             self._login(self.user.email, self.user.password)
 
     def __exit__(self, exc_type, exc_value, traceback):
