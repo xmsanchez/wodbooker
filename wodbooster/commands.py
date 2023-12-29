@@ -15,6 +15,9 @@ from .exceptions import NotLoggedUser, InvalidWodBusterAPIResponse, LoginError, 
 @with_appcontext
 def book(offset, url='https://contact.wodbuster.com'):
 
+    if int(offset) > 6:
+        raise click.BadParameter('Offset must be between 0 and 6')
+
     today = datetime.date.today()
     dow = today.weekday()
     dows = [(dow + i) % 7 for i in list(range(int(offset) + 1))]
