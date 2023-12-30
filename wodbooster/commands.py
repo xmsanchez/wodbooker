@@ -71,7 +71,7 @@ def subscribe_to_events(date, url='https://contact.wodbuster.com'):
                 print(f"{event_time.strftime('%d/%m/%Y %H:%M:%S')} - {event.data}")
 
                 time_elapsed = (event_time - current_time).total_seconds()
-                if time_elapsed >= 7200:
+                if time_elapsed >= 3600:
                     print("2 hours have passed since the last event, reseting connection")
                     client.close()
                     break
