@@ -60,11 +60,19 @@ def subscribe_to_events(date, url='https://contact.wodbuster.com'):
     user = db.session.query(User).first()
     scraper = Scraper(url, user)
     with scraper:
-        date = datetime.datetime.strptime(date, '%d/%m/%Y').date()
-        client = scraper.get_subscription(date)
+        while True:
+            current_time = datetime.datetime.now()
+            parsed_date = datetime.datetime.strptime(date, '%d/%m/%Y').date()
+            client = scraper.get_subscription(parsed_date)
 
-        for event in client.events():
-            data = json.loads(event.data[:-1])
-            if "type" not in data or data["type"] != 6:
-                current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                print(f"{current_time} - {event.data}")
+            for event in client.events():
+                # data = json.loads(event.data[:-1])
+                event_time = datetime.datetime.now()
+                print(f"{event_time.strftime('%d/%m/%Y %H:%M:%S')} - {event.data}")
+
+                time_elapsed = (event_time - current_time).total_seconds()
+                if time_elapsed >= 7200:
+                    print("2 hours have passed since the last event, reseting connection")
+                    client.close()
+                    break
+
