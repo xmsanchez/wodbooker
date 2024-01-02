@@ -67,7 +67,7 @@ admin = Admin(app, name='WodBooster', index_view=MyAdminIndexView(),
               base_template='base.html', template_mode='bootstrap4')
 
 # Add views
-admin.add_view(BookingAdmin(Booking, db.session))
+admin.add_view(BookingAdmin(Booking, db.session, 'Reservas'))
 
 # Start booking loop
 with app.app_context():

@@ -83,7 +83,6 @@ class MyAdminIndexView(AdminIndexView):
         if login.current_user.is_authenticated:
             return redirect(url_for('booking.index_view'))
         self._template_args['form'] = form
-        self._template_args['link'] = ""
         return super(MyAdminIndexView, self).index()
 
     @expose('/logout/')
