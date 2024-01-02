@@ -1,12 +1,12 @@
 {% extends 'admin/master.html' %}
 {% block body %}
 {{ super() }}
+{% if not current_user.is_authenticated %}
+<div class="alert alert-info" role="alert">
+  Utiliza tus credenciales de WodBuster para acceder
+</div>
+{% endif %}
 <div class="container">
-  {% if not current_user.is_authenticated %}
-    <div class="alert alert-info" role="alert">
-      Utiliza tus credenciales de WodBuster para acceder
-    </div>
-  {% endif %}
   <div class="row justify-content-center">
     {% if not current_user.is_authenticated %}
       <div class="col-md-4">
