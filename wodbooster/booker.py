@@ -133,10 +133,11 @@ class Booker:
     def _set_booking_status(self, new_status: str) -> None:
         split_sep = '\n'
         previous_status = self._booking.status.split(split_sep) if self._booking.status else []
-        current_date = datetime.now().strftime('%d/%m/%Y %H:%M')
-        updated_status = previous_status[-10:] + [f"{current_date}: {new_status}"]
-        self._booking.status = split_sep.join(updated_status)
-        db.session.commit()
+        if not previous_status or new_status not in previous_status[-1]:
+            current_date = datetime.now().strftime('%d/%m/%Y %H:%M')
+            updated_status = previous_status[-10:] + [f"{current_date}: {new_status}"]
+            self._booking.status = split_sep.join(updated_status)
+            db.session.commit()
 
     def run(self) -> None:
         """
