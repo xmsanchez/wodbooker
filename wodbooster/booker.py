@@ -94,7 +94,7 @@ class Booker:
                         pause.until(e.available_at)
                     else:
                         self._set_booking_status(f"Waiting until classes are loaded for {day_to_book.strftime('%d/%m/%Y')}")
-                        scraper.wait_until_event(self._booking.url, day_to_book, 'changedPizarra')
+                        scraper.wait_until_event(self._booking.url, day_to_book, 'changedPizarra', datetime_to_book)
 
                     continue
                 except RequestException as e:
