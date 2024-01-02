@@ -7,14 +7,17 @@ class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     dow = db.Column(db.Integer)
     time = db.Column(db.Time)
-    booked_at = db.Column(db.Date)
+    booked_at = db.Column(db.DateTime)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User')
-
+    last_book_date = db.Column(db.Date)
+    status = db.Column(db.String(512))
+    url = db.Column(db.String(128))
+    available_at = db.Column(db.Time)
+    offset = db.Column(db.Integer)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    password = db.Column(db.String(100))
     email = db.Column(db.String(120), unique=True)
     cookie = db.Column(db.String(1024))
 

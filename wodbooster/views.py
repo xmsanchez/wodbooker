@@ -1,41 +1,56 @@
-from flask import Flask, redirect, url_for, request, flash
-from wtforms import form, fields, validators, widgets
+import calendar
+from flask import redirect, url_for, request, flash
+from markupsafe import Markup
+from wtforms import form, fields, validators
 from flask_admin.form.fields import TimeField
 import flask_login as login
-from flask_admin import Admin, AdminIndexView, helpers, expose
+from flask_admin import AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
-from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, db
-from .scraper import Scraper
-import calendar
+from requests.exceptions import RequestException
+from sqlalchemy import and_
+# from werkzeug.security import generate_password_hash, check_password_hash
+from .models import User, db, Booking
+from .booker import start_booking_loop, stop_booking_loop
+from .scraper import refresh_scraper
+from .exceptions import LoginError, InvalidWodBusterResponse
 
 
 class LoginForm(form.Form):
     email = fields.StringField(validators=[validators.DataRequired()])
     password = fields.PasswordField(validators=[validators.DataRequired()])
 
-    def validate_email(self, field):
-        user = self.get_user()
-        if user is None:
-            raise validators.ValidationError('Invalid user')
+    def __init__(self,
+        formdata=None,
+        obj=None,
+        prefix="",
+        data=None,
+        meta=None,
+        **kwargs,
+    ) -> None:
+        super().__init__(formdata, obj, prefix, data, meta, **kwargs)
+        self._scraper = None
 
-        # we're comparing the plaintext pw with the the hash from the db
-        # if not check_password_hash(user.password, self.password.data):
-        # to compare plain text passwords use
-        if user.password != self.password.data:
-            raise validators.ValidationError('Invalid password')
+    def validate_password(self, field):
+        try:
+            self._scraper = refresh_scraper(self.email.data, self.password.data)
+        except (LoginError, InvalidWodBusterResponse) as e:
+            raise validators.ValidationError(str(e))
+        except RequestException as e:
+            raise validators.ValidationError("Unexpected network error while logging in...") from e
 
     def get_user(self):
-        return db.session.query(User).filter_by(email=self.email.data).first()
-
-
-class RegistrationForm(form.Form):
-    email = fields.StringField(validators=[validators.DataRequired()])
-    password = fields.PasswordField(validators=[validators.DataRequired()])
-
-    def validate_email(self, field):
-        if db.session.query(User).filter_by(email=self.email.data).count() > 0:
-            raise validators.ValidationError('Duplicate username')
+        existing_user = db.session.query(User).filter_by(email=self.email.data).first()
+        if existing_user:
+            existing_user.cookie = self._scraper.get_cookies()
+            db.session.commit()
+            return existing_user
+        else:
+            user = User()
+            user.email = self.email.data
+            user.cookie = self._scraper.get_cookies()
+            db.session.add(user)
+            db.session.commit()
+            return user
 
 
 # Create customized index view class that handles login & registration
@@ -61,32 +76,8 @@ class MyAdminIndexView(AdminIndexView):
 
         if login.current_user.is_authenticated:
             return redirect(url_for('booking.index_view'))
-        link = '<p>Don\'t have an account? <a href="' + \
-            url_for('.register_view') + '">Click here to register.</a></p>'
         self._template_args['form'] = form
-        self._template_args['link'] = link
-        return super(MyAdminIndexView, self).index()
-
-    @expose('/register/', methods=('GET', 'POST'))
-    def register_view(self):
-        form = RegistrationForm(request.form)
-        if helpers.validate_form_on_submit(form):
-            user = User()
-
-            form.populate_obj(user)
-            # we hash the users password to avoid saving it as plaintext in the db,
-            # remove to use plain text:
-            # user.password = generate_password_hash(form.password.data)
-
-            db.session.add(user)
-            db.session.commit()
-
-            login.login_user(user)
-            return redirect(url_for('.index'))
-        link = '<p>Already have an account? <a href="' + \
-            url_for('.login_view') + '">Click here to log in.</a></p>'
-        self._template_args['form'] = form
-        self._template_args['link'] = link
+        self._template_args['link'] = ""
         return super(MyAdminIndexView, self).index()
 
     @expose('/logout/')
@@ -100,19 +91,35 @@ class BookingForm(form.Form):
     dow = fields.SelectField('Day of the week', choices=[(0, 'Monday'), (1, 'Tuesday'), (
         2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday')])
 
-    time = TimeField('Time')
+    time = TimeField('Booking time')
+    url = fields.StringField('WodBuster URL (ex: https://YOUR_BOX.wodbuster.com)')
+    offset = fields.IntegerField('Offset')
+    available_at = TimeField('Attempt first booking at')
 
+    def validate_dow(self, field):
+        if db.session.query(Booking).filter(
+            and_(
+                Booking.dow==field.data,
+                Booking.user==login.current_user,
+                Booking.url==self.url.data,
+                Booking.time==self.time.data,
+                Booking.id!=request.args.get('id'))).first():
+            raise validators.ValidationError("There is already a booking for this day of the week")
 
 class BookingAdmin(sqla.ModelView):
     form = BookingForm
 
-    column_labels = dict(dow='Day of the week')
-    column_list = ('dow', 'time', 'booked_at')
+    column_labels = dict(dow='Day of the week', last_book_date='Date of last booking', status='Status')
+    column_list = ('dow', 'time', 'last_book_date', 'booked_at', 'status')
 
     def get_list(self, *args, **kwargs):
         count, data = super(BookingAdmin, self).get_list(*args, **kwargs)
         for item in data:
             item.dow = calendar.day_name[item.dow]
+            status = item.status.split('\n') if item.status else []
+            status = list(map(lambda x: f'<li>{x}</li>', status))
+            status = "<ul>" + "".join(status) + "</ul>"
+            item.status = Markup(status)
         return count, data
 
     def get_query(self):
@@ -133,12 +140,17 @@ class BookingAdmin(sqla.ModelView):
         if login.current_user.is_authenticated and model.user_id != login.current_user.id:
             flash("You are not authorized to edit this element", "warning")  # Mensaje de advertencia
             return False
-        return super().update_model(form, model)
+
+        stop_booking_loop(model)
+        returned_value = super().update_model(form, model)
+        start_booking_loop(model)
+        return returned_value
 
     def delete_model(self, model):
         if login.current_user.is_authenticated and model.user_id != login.current_user.id:
             flash("You are not authorized to delete this element", "warning")
             return False
+        stop_booking_loop(model)
         return super().delete_model(model)
 
     def inaccessible_callback(self, name, **kwargs):
@@ -150,4 +162,5 @@ class BookingAdmin(sqla.ModelView):
         booking.user = login.current_user
         db.session.flush()
         db.session.commit()
+        start_booking_loop(booking)
         return booking

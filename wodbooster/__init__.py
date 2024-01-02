@@ -1,5 +1,6 @@
 import os
 import os.path as op
+import logging
 from flask import Flask, redirect
 from flask_sqlalchemy import SQLAlchemy
 
@@ -8,14 +9,13 @@ import flask_login as login
 from flask_admin.contrib import sqla
 from .views import MyAdminIndexView, BookingAdmin
 from .models import User, Booking, db
-from .commands import *
+from .booker import start_booking_loop
+
+# Configure logging
+logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
 
 # Create application
 app = Flask(__name__)
-
-# Commands
-app.cli.add_command(book)
-app.cli.add_command(subscribe_to_events)
 
 # Create dummy secrey key so we can use sessions
 app.config['SECRET_KEY'] = '123456790'
@@ -23,7 +23,7 @@ app.config['SECRET_KEY'] = '123456790'
 # Create in-memory database
 app.config['DATABASE_FILE'] = 'db.sqlite'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
-    app.config['DATABASE_FILE']
+    app.config['DATABASE_FILE'] + '?check_same_thread=False'
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -60,3 +60,9 @@ admin = Admin(app, name='WodBooster', index_view=MyAdminIndexView(),
 
 # Add views
 admin.add_view(BookingAdmin(Booking, db.session))
+
+# Start booking loop
+with app.app_context():
+    bookings = db.session.query(Booking).all()
+    for booking in bookings:
+        start_booking_loop(booking)

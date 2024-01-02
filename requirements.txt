@@ -9,3 +9,5 @@ markupsafe==2.0.1
 requests==2.28.2
 sseclient-py==1.8.0
 iterators==0.2.0
+pause==0.3
+pytz==2023.3.post1

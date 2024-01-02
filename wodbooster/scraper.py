@@ -1,17 +1,24 @@
 import datetime
+import re
 import pickle
+import logging
 import json
 import requests
-from bs4 import BeautifulSoup
-from .exceptions import LoginError, InvalidWodBusterAPIResponse, NotLoggedUser
 import sseclient
-
+import pytz
+from iterators import TimeoutIterator
+from bs4 import BeautifulSoup
+from .exceptions import LoginError, InvalidWodBusterResponse, \
+    BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
 }
 
+_UTC_TZ = pytz.timezone('UTC')
+_MADRID_TZ = pytz.timezone('Europe/Madrid')
 _SSE_SERVER = "https://sr-2-0.wodbuster.com"
+_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE = "WodBuster is not accepting more requests at this time. Try again in a minute"
 
 
 class Scraper():
@@ -19,59 +26,78 @@ class Scraper():
     WodBuster scraper
     """
 
-    def __init__(self, url, user):
-        self.url = url
-        self._box_name = self.url.split("/")[2].split(".")[0]
+    def __init__(self, user: str, password: str=None, cookie: bytes=None):
+        self._user = user
+        self._password = password
         self.logged = False
-        self._session = None
-        self.user = user
-
-    def __enter__(self):
-        if self.user.cookie:
-            print(f"Attempt to use cookies for user {self.user.email}")
-            self._session = requests.Session()
-            self._session.cookies.update(pickle.loads(self.user.cookie))
-
-            try:
-                self.get_classes(datetime.datetime.now())
-                self.logged = True
-                print("Cookies Valid!")
-            except InvalidWodBusterAPIResponse:
-                print("Cookies Invalid!")
-                self._login(self.user.email, self.user.password)
-        else:
-            print(f"Cookies not set for user {self.user.email}. Logging in...")
-            self._login(self.user.email, self.user.password)
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.user.cookie = pickle.dumps(self._session.cookies)
-
-    def _login(self, username, password):
-        """
-        Login the user into WodBuster
-        """
         self._session = requests.Session()
-        login_url = f"https://wodbuster.com/account/login.aspx?cb={self._box_name}&ReturnUrl={self.url}%2fuser%2fdefault.aspx"
-        initial_request = self._session.get(login_url, headers=_HEADERS)
+        self._cookie = cookie
+        self._box_name_by_url = {}
 
-        soup = BeautifulSoup(initial_request.content, 'lxml')
-        viewstatec = soup.find(id='__VIEWSTATEC')['value']
-        eventvalidation = soup.find(id='__EVENTVALIDATION')['value']
-        csrftoken = soup.find(id='CSRFToken')['value']
+    def get_cookies(self) -> bytes:
+        """
+        Returns the cookies for the current session
+        """
+        return pickle.dumps(self._session.cookies)
 
-        data_login = {'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlLogin$CtlAceptar',
-                'ctl00$ctl00$body$body$CtlLogin$IoTri': '',
-                'ctl00$ctl00$body$body$CtlLogin$IoTrg': '',
-                'ctl00$ctl00$body$body$CtlLogin$IoTra': '',
-                'ctl00$ctl00$body$body$CtlLogin$IoEmail': username,
-                'ctl00$ctl00$body$body$CtlLogin$IoPassword': password,
-                'ctl00$ctl00$body$body$CtlLogin$cIoUid': '',
-                'ctl00$ctl00$body$body$CtlLogin$CtlAceptar': 'Aceptar\n'}
+    def login(self) -> None:
+        """
+        Attempt to login the user into WodBuster
+        :raises LoginError: If user/password combination fails
+        :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
+        :raises InvalidWodBusterAPIResponse: If the response from WodBuster is not valid (CloudFare
+        protection, etc.)
+        :raises RequestException: If a network error occurs or an HTTP error code is received
+        """
+        if self.logged:
+            return
+        
+        if self._cookie:
+            self._session.cookies.update(pickle.loads(self._cookie))
+            road_to_box_request = self._session.get("https://wodbuster.com/account/roadtobox.aspx",
+                                                    headers=_HEADERS, allow_redirects=False, timeout=10)
+            if "Location" not in road_to_box_request.headers:
+                raise InvalidWodBusterResponse("Reponse from WodBuster roadtobox without a Location header")
+            elif "login" not in road_to_box_request.headers["Location"]:
+                self.logged = True
+            else:
+                self._login_with_username_and_password()
+        else:
+            self._login_with_username_and_password()
+
+    def _login_with_username_and_password(self):
+
+        if not self._password:
+            raise PasswordRequired("Password is required")
+
+        self._session = requests.Session()
+        login_url = "https://wodbuster.com/account/login.aspx"
+        initial_request = self._session.get(login_url, headers=_HEADERS, timeout=10)
+
+        try:
+            soup = BeautifulSoup(initial_request.content, 'lxml')
+            viewstatec = soup.find(id='__VIEWSTATEC')['value']
+            eventvalidation = soup.find(id='__EVENTVALIDATION')['value']
+            csrftoken = soup.find(id='CSRFToken')['value']
+        except TypeError as e:
+            logging.exception("WodBuster response cannot be parsed")
+            raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE) from e
+
+        data_login = {
+            'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlLogin$CtlAceptar',
+            'ctl00$ctl00$body$body$CtlLogin$IoTri': '',
+            'ctl00$ctl00$body$body$CtlLogin$IoTrg': '',
+            'ctl00$ctl00$body$body$CtlLogin$IoTra': '',
+            'ctl00$ctl00$body$body$CtlLogin$IoEmail': self._user,
+            'ctl00$ctl00$body$body$CtlLogin$IoPassword': self._password,
+            'ctl00$ctl00$body$body$CtlLogin$cIoUid': '',
+            'ctl00$ctl00$body$body$CtlLogin$CtlAceptar': 'Aceptar\n'
+        }
 
         login_request = self._login_request(login_url, viewstatec, eventvalidation, csrftoken, data_login)
 
         if login_request.status_code != 200:
-            raise LoginError('Invalid response status from login request')
+            raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
 
         if 'class="Warning"' in login_request.text:
             raise LoginError('Invalid credentials')
@@ -89,10 +115,9 @@ class Scraper():
                                                     data_confirm)
 
         if confirm_login_request.status_code != 200:
-            raise LoginError('Invalid response status from login request')
+            raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
 
         self.logged = True
-
 
     def _login_request(self, url, viewstatec, eventvalidation, csrftoken, extra_fields):
         data = {
@@ -107,67 +132,183 @@ class Scraper():
 
         data = {**data, **extra_fields}
 
-        return self._session.post(url, data=data, headers=_HEADERS)
+        request = self._session.post(url, data=data, headers=_HEADERS, timeout=10)
+        request.raise_for_status()
+        return request
 
     @staticmethod
     def _lookup_header_value(text, header_name):
         index = text.index(header_name)
         return text[index + len(header_name) + 1:].split("|")[0]
 
-    def book(self, date):
-        """ Book a date, return True if the action was successful otherwise False """
-        if not self.logged:
-            raise NotLoggedUser('This action requires to be logged')
+    def book(self, url: str, booking_datetime: datetime) -> bool:
+        """ 
+        Book a class at the given box for the given date. True is returned if the booking was successful
+        :param url: The WodBuster URL associated to the box where the class has to be booked
+        :param booking_datetime: The date and time when the class has to be booked
+        :return: True if the action was successful otherwise False
+        :raises BookingNotAvailable: If the class is not available for booking
+        :raises ClassIsFull: If the class is full
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid (CloudFare
+        protection, etc.)
+        :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
+        :raises RequestException: If a network error occurs or an HTTP error code is received
+        """
+        self.login()
 
-        classes, epoch = self.get_classes(date)
-        hour = date.strftime('%H:%M:%S')
+        classes, epoch = self.get_classes(url, booking_datetime.date())
+        hour = booking_datetime.strftime('%H:%M:%S')
 
-        for _class in classes:
+        if not classes['Data']:
+            avaiable_at = None
+            if "PrimeraHoraPublicacion" in classes:
+                avaiable_at = _MADRID_TZ.localize(datetime.datetime.strptime(classes["PrimeraHoraPublicacion"],
+                                                                             '%m/%d/%Y %H:%M:%S'))
+            raise BookingNotAvailable('No classes available', avaiable_at)
+
+        for _class in classes['Data']:
             if _class['Hora'] == hour:
-                _id = _class['Valores'][0]['Valor']['Id']
-                book_result = self._book_request(f'{self.url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
+                class_details = _class['Valores'][0]['Valor']
+                _id = class_details['Id']
+                if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
+                    raise ClassIsFull("Class is full")
+                
+                book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
                 return book_result['Res']['EsCorrecto']
 
         return False
 
-    def get_classes(self, date):
-        """ Get the classes for a given epoch """
-        epoch = int(date.timestamp())
-        return self._book_request(f'{self.url}/athlete/handlers/LoadClass.ashx?ticks={epoch}')['Data'], epoch
+    def get_classes(self, url: str, date: datetime.date) -> tuple:
+        """ 
+        Get the classes for a given epoch
+        :param url: The WodBuster URL associated to the box where classes has to be obtained
+        :param date: The day for which the classes have to be obtained
+        :return: A tuple. The first element is the response from WodBuster API for the specified date. 
+        The second element is the date in epoch format in case is useful for other operations
+        :raises BookingNotAvailable: If the class is not available for booking
+        :raises ClassIsFull: If the class is full
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid (CloudFare
+        protection, etc.)
+        :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
+        :raises RequestException: If a network error occurs or an HTTP error code is received
+        """
+        midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
+        epoch = int(midnight.timestamp())
+        return self._book_request(f'{url}/athlete/handlers/LoadClass.ashx?ticks={epoch}'), epoch
 
     def _book_request(self, url):
         try:
-            request = self._session.get(url, headers=_HEADERS)
-
+            request = self._session.get(url, headers=_HEADERS, allow_redirects=False, timeout=10)
+            if request.status_code == 302 and "login" in request.headers["Location"]:
+                raise InvalidBox("Provided URL is not accesible for the given user")
             if request.status_code != 200:
-                raise InvalidWodBusterAPIResponse('Invalid response status from WodBuster')
- 
+                raise InvalidWodBusterResponse('Invalid response status from WodBuster')
+
             return request.json()
         except requests.exceptions.JSONDecodeError as e:
-            raise InvalidWodBusterAPIResponse('WodBuster returned a non JSON response') from e
+            raise InvalidWodBusterResponse('WodBuster returned a non JSON response') from e
         except requests.exceptions.RequestException as e:
-            raise InvalidWodBusterAPIResponse('WodBuster returned a non expected response') from e
+            raise InvalidWodBusterResponse('WodBuster returned a non expected response') from e
 
-    def get_subscription(self, date):
-        """ Get notifications for a given date """
-        negotiate_request = self._session.post(f"{_SSE_SERVER}/bookinghub/negotiate?negotiateVersion=1",
-                                               headers=_HEADERS)
-        connection_token = negotiate_request.json()["connectionToken"]
-        headers = {**_HEADERS, **{"Accept": "text/event-stream"}}
-        booking_hub_request = self._session.get(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
-                                                stream=True, headers=headers)
+    def wait_until_event(self, url: str, date: datetime.date, expected_event:str,
+                         max_datetime: datetime=None):
+        """ 
+        Wait until a specific event is received for a given day
+        :param url: The WodBuster URL associated to the box where the event will be received
+        :param date: The day associated with the occurrence of the event
+        :param expected_event: The event to wait for
+        :param max_datetime: The maximum date when the event is expected. By default, events will 
+        be waited for a maximum of 7 days
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid (CloudFare
+        protection, etc.)
+        :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
+        :raises RequestException: If a network error occurs or an HTTP error code is received
+        """
+        self.login()
+        max_datetime = max_datetime or datetime.datetime.now() + datetime.timedelta(days=7)
 
-        self._send_sse_command(connection_token, {"protocol":"json","version":1})
-        epoch = int(datetime.datetime.combine(date, datetime.datetime.min.time()).timestamp())
-        self._send_sse_command(connection_token, {"arguments": [self._box_name, str(epoch)],
-                                                  "invocationId":"0",
-                                                  "target":"JoinRoom",
-                                                  "type":1})
+        if url not in self._box_name_by_url:
+            homepage_request = self._session.get(f"{url}/user/", headers=_HEADERS,
+                                                 allow_redirects=False, timeout=10)
+            look_up = re.search(r"InitAjax\('([^']*)',", homepage_request.text)
+            if not look_up:
+                raise InvalidBox("Provided URL is not accesible for the given user")
+            self._box_name_by_url[url] = look_up.group(1)
+        
+        box_name = self._box_name_by_url[url]
+        event_found = False
+        timeout = False
 
-        return sseclient.SSEClient(booking_hub_request)
+        while not event_found and not timeout:
+            negotiate_request = self._session.post(f"{_SSE_SERVER}/bookinghub/negotiate?negotiateVersion=1",
+                                        headers=_HEADERS, timeout=10)
+            connection_token = negotiate_request.json()["connectionToken"]
+            headers = {**_HEADERS, **{"Accept": "text/event-stream"}}
+            booking_hub_request = self._session.get(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
+                                                    stream=True, headers=headers)
+
+            self._send_sse_command(connection_token, {"protocol":"json","version":1})
+            midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
+            epoch = int(midnight.timestamp())
+            self._send_sse_command(connection_token, {"arguments": [box_name, str(epoch)],
+                                                        "invocationId":"0",
+                                                        "target":"JoinRoom",
+                                                        "type":1})
+
+            client = sseclient.SSEClient(booking_hub_request)
+
+            for event in TimeoutIterator(client.events(), timeout=60, sentinel=None):
+                if not event:
+                    logging.warning("No event received after 60 seconds. Reseting connection")
+                    # client.close()    # It hangs if the connection is not available...
+                    break
+
+                if max_datetime and datetime.datetime.now() > max_datetime:
+                    timeout = True
+                    break
+
+                data = json.loads(event.data[:-1])
+                event_found = "target" in data and data["target"] == expected_event
 
     def _send_sse_command(self, connection_token, command):
         headers = {**_HEADERS, **{"Content-Type": "text/plain"}}
         command_str = json.dumps(command) + "\u001e"
         self._session.post(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
-                           data=command_str, headers=headers)
+                           data=command_str, headers=headers, timeout=10)
+
+
+__SCRAPERS = {}
+
+
+def get_scraper(email: str, cookie: bytes) -> Scraper:
+    """
+    Returns a scrapper for a given user. If a scraper for the given user already exists, the
+    existing one will be returned. Otherwise, a new one will be created.
+    :param: The user to get the scraper for
+    :param: The cookie associated with the user
+    """
+    if email not in __SCRAPERS:
+        __SCRAPERS[email] = Scraper(email, cookie=cookie)
+
+    return __SCRAPERS[email]
+
+
+def refresh_scraper(email: str, password: str) -> Scraper:
+    """
+    Force the creation of a new scraper for the given user with the provided password.
+    If the provided credentials are invalid, a LoginError will be risen and the old scraper 
+    will be kept
+    :param email: The email of the user
+    :param password: The password of the user
+    :raises LoginError: If the provided credentials are invalid
+    :raises InvalidWodBusterResponse: If the response from WodBuster is not valid (CloudFare
+    protection, etc.)
+    :raises RequestException: If a network error occurs or an HTTP error code is received
+    """
+    scraper = Scraper(email, password)
+    scraper.login()
+    __SCRAPERS[email] = scraper
+    return scraper
