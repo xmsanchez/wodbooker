@@ -67,18 +67,18 @@ class Booker:
                             self._booking.available_at))
 
                     if book_available_at > datetime.now(_MADRID_TZ):
-                        self._set_booking_status(f"Waiting until {book_available_at.strftime('%d/%m/%Y %H:%M')} when booking for {day_to_book.strftime('%d/%m/%Y')} will be available")
+                        self._set_booking_status(f"Esperando hasta el {book_available_at.strftime('%d/%m/%Y a las %H:%M')} cuando las reservas para el {day_to_book.strftime('%d/%m/%Y')} estén disponibles")
                         pause.until(book_available_at)
 
                     if self._is_active:
                         if scraper.book(self._booking.url, datetime_to_book):
                             logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
-                            self._set_booking_status(f"Booking for {datetime_to_book.strftime('%d/%m/%Y %H:%M')} completed successfully")
+                            self._set_booking_status(f"Reserva para el {day_to_book.strftime('%d/%m/%Y')} completada correctamente")
                             errors = 0
                         else:
-                            logging.warning("Impossible to book classes for %s for %s. Class is already booked or user cannot book. Igoning week and attempting booking for next week", 
+                            logging.warning("Impossible to book classes for %s for %s. Class is already booked or user cannot book. Igoning week and attempting booking for next week",
                                             self._booking.user.email, datetime_to_book)
-                            self._set_booking_status("Class cannot be booked for unknown reason. Ignoring week and attempting booking for next week")
+                            self._set_booking_status("La clase no se ha podido reservar por un motivo desconocido. Se ignora esta semana y se intentará reservar para el mismo día de la siguiente semana")
                             errors = 0
                     
                     self._booking.last_book_date = day_to_book
@@ -86,44 +86,44 @@ class Booker:
                     self._booking.user.cookie = scraper.get_cookies()
                     db.session.commit()
                 except ClassIsFull:
-                    self._set_booking_status(f"Class at {day_to_book.strftime('%d/%m/%Y')} is full. Waiting for available seats")
+                    self._set_booking_status(f"La clase del {day_to_book.strftime('%d/%m/%Y')} está llena. Esperando a que haya plazas disponibles")
                     scraper.wait_until_event(self._booking.url, day_to_book, 'changedBooking', datetime_to_book)
                 except BookingNotAvailable as e:
                     if e.available_at:
-                        self._set_booking_status(f"Waiting until {e.available_at.strftime('%d/%m/%Y %H:%M')} when booking for {day_to_book.strftime('%d/%m/%Y')} will be available")
+                        self._set_booking_status(f"Esperando hasta el {e.available_at.strftime('%d/%m/%Y a las %H:%M')} cuando las reservas para el {day_to_book.strftime('%d/%m/%Y')} estén disponibles")
                         pause.until(e.available_at)
                     else:
-                        self._set_booking_status(f"Waiting until classes are loaded for {day_to_book.strftime('%d/%m/%Y')}")
+                        self._set_booking_status(f"Esperando a que las clases del día {day_to_book.strftime('%d/%m/%Y')} estén cargadas")
                         scraper.wait_until_event(self._booking.url, day_to_book, 'changedPizarra', datetime_to_book)
 
                     continue
                 except RequestException as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Request Exception: %s", e)
-                    self._set_booking_status(f"Unexpected network error. Waiting {sleep_for} seconds before retrying...")
+                    self._set_booking_status(f"Error inesperado de red. Esperando {sleep_for} segundos antes de volver a intentarlo...")
                     errors += 1
                     pause.seconds(sleep_for)
                 except InvalidWodBusterResponse:
                     sleep_for = (errors + 1) * 60
-                    self._set_booking_status(f"Invalid response from WodBuster. Waiting {sleep_for} seconds before retrying...")
+                    self._set_booking_status(f"Respuesta inesperada de WodBuster. Esperando {sleep_for} segundos antes de volver a intentarlo...")
                     errors += 1
                     pause.seconds(sleep_for)
                 except PasswordRequired:
                     self._is_active = False
                     logging.warning("Credentials for user %s are outdated. Aborting...", self._booking.user.email)
-                    self._set_booking_status("Cookies are outdated. Please, login again and update this entry...")
+                    self._set_booking_status("Tus credenciales están caducadas. Vuelve a logarte y actualiza esta entrada para reactivar las reservas")
                 except LoginError:
                     self._is_active = False
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
-                    self._set_booking_status("Login failed: invalid credenctials...")
+                    self._set_booking_status("Login fallido: credenciales inválidas. Vuelve a logarte y vuelve a intentarlo")
                 except InvalidBox:
                     self._is_active = False
                     logging.warning("User %s accessing to an invalid box detected. Aborting...", self._booking.user.email)
-                    self._set_booking_status("The box URL is not valid or you don't have access to it. Please, check the URL and try again...")
+                    self._set_booking_status("La URL del box introducida no es válida o no tienes acceso al mismo. Actualiza la URL y vuelve a intentarlo")
 
             if errors >= 5:
                 logging.error("Exiting thread as maximum number of retries has been reached. Review logs for more information")
-                self._set_booking_status("Impossible to book. Aborted...")
+                self._set_booking_status("Se han producido demasiados errores al intentar reservar. Proceso abortado")
                 self._session.commit()
             elif not self._is_active:
                 logging.info("Exiting because thread is marked as inactive")

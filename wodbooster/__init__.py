@@ -1,12 +1,13 @@
 import os
 import os.path as op
 import logging
-from flask import Flask, redirect
+from flask import Flask, redirect, request, session
 from flask_sqlalchemy import SQLAlchemy
 
 from flask_admin import Admin
 import flask_login as login
 from flask_admin.contrib import sqla
+from flask_babelex import Babel
 from .views import MyAdminIndexView, BookingAdmin
 from .models import User, Booking, db
 from .booker import start_booking_loop
@@ -16,6 +17,13 @@ logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=l
 
 # Create application
 app = Flask(__name__)
+babel = Babel(app)
+
+@babel.localeselector
+def get_locale():
+    if request.args.get('lang'):
+        session['lang'] = request.args.get('lang')
+    return session.get('lang', 'es')
 
 # Create dummy secrey key so we can use sessions
 app.config['SECRET_KEY'] = '123456790'
