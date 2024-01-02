@@ -8,7 +8,6 @@ from flask_admin import AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
 from requests.exceptions import RequestException
 from sqlalchemy import and_
-# from werkzeug.security import generate_password_hash, check_password_hash
 from .models import User, db, Booking
 from .booker import start_booking_loop, stop_booking_loop
 from .scraper import refresh_scraper
@@ -93,8 +92,8 @@ class BookingForm(form.Form):
 
     time = TimeField('Booking time')
     url = fields.StringField('WodBuster URL (ex: https://YOUR_BOX.wodbuster.com)')
-    offset = fields.IntegerField('Offset')
-    available_at = TimeField('Attempt first booking at')
+    offset = fields.IntegerField('Days in advance')
+    available_at = TimeField('Booking opening hour')
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(
@@ -164,3 +163,13 @@ class BookingAdmin(sqla.ModelView):
         db.session.commit()
         start_booking_loop(booking)
         return booking
+
+    def create_form(self, obj=None):
+        form = super().create_form(obj)
+        last_booking = db.session.query(Booking).filter_by(user=login.current_user).order_by(Booking.id.desc()).first()
+        if last_booking:
+            form.url.data = last_booking.url
+            form.offset.data = last_booking.offset
+            form.available_at.data = last_booking.available_at
+
+        return form
