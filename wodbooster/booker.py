@@ -73,7 +73,7 @@ class Booker:
                     if self._is_active:
                         if scraper.book(self._booking.url, datetime_to_book):
                             logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
-                            self._set_booking_status("Booking completed successfully")
+                            self._set_booking_status(f"Booking for {datetime_to_book.strftime('%d/%m/%Y %H:%M')} completed successfully")
                             errors = 0
                         else:
                             logging.warning("Impossible to book classes for %s for %s. Class is already booked or user cannot book. Igoning week and attempting booking for next week", 

@@ -108,8 +108,8 @@ class BookingForm(form.Form):
 class BookingAdmin(sqla.ModelView):
     form = BookingForm
 
-    column_labels = dict(dow='Day of the week', last_book_date='Date of last booking', status='Status')
-    column_list = ('dow', 'time', 'last_book_date', 'booked_at', 'status')
+    column_labels = dict(dow='Day of the week', status='Status')
+    column_list = ('dow', 'time', 'status')
 
     def get_list(self, *args, **kwargs):
         count, data = super(BookingAdmin, self).get_list(*args, **kwargs)
