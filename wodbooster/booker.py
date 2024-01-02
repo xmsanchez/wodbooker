@@ -65,7 +65,8 @@ class Booker:
                         datetime.combine(
                             day_to_book - timedelta(days=self._booking.offset),
                             self._booking.available_at))
-                    if book_available_at > datetime.now():
+
+                    if book_available_at > datetime.now(_MADRID_TZ):
                         self._set_booking_status(f"Waiting until {book_available_at.strftime('%d/%m/%Y %H:%M')} when booking for {day_to_book.strftime('%d/%m/%Y')} will be available")
                         pause.until(book_available_at)
 
