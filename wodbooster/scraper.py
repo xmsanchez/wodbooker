@@ -6,7 +6,7 @@ import json
 import requests
 import sseclient
 import pytz
-from iterators import TimeoutIterator
+from func_timeout import func_timeout, FunctionTimedOut
 from bs4 import BeautifulSoup
 from .exceptions import LoginError, InvalidWodBusterResponse, \
     BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox
@@ -213,7 +213,7 @@ class Scraper():
             raise InvalidWodBusterResponse('WodBuster returned a non expected response') from e
 
     def wait_until_event(self, url: str, date: datetime.date, expected_event:str,
-                         max_datetime: datetime=None):
+                         max_datetime: datetime=None) -> bool:
         """ 
         Wait until a specific event is received for a given day
         :param url: The WodBuster URL associated to the box where the event will be received
@@ -221,6 +221,7 @@ class Scraper():
         :param expected_event: The event to wait for
         :param max_datetime: The maximum date when the event is expected. By default, events will 
         be waited for a maximum of 7 days
+        :return: True if the event is found. False otherwise.
         :raises LoginError: If user/password combination fails.
         :raises InvalidWodBusterResponse: If the response from WodBuster is not valid (CloudFare
         protection, etc.)
@@ -254,24 +255,35 @@ class Scraper():
             midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
             epoch = int(midnight.timestamp())
             self._send_sse_command(connection_token, {"arguments": [box_name, str(epoch)],
-                                                        "invocationId":"0",
-                                                        "target":"JoinRoom",
-                                                        "type":1})
+                                                      "invocationId":"0",
+                                                      "target":"JoinRoom",
+                                                      "type":1})
 
             client = sseclient.SSEClient(booking_hub_request)
+            client_iterator = client.events()
 
-            for event in TimeoutIterator(client.events(), timeout=60, sentinel=None):
-                if not event:
+            connection_active = True
+            while connection_active and not event_found and not timeout:
+                try:
+                    event = func_timeout(60, next, args=(client_iterator,))
+                    if max_datetime and datetime.datetime.now() > max_datetime:
+                        timeout = True
+                        break
+
+                    data = json.loads(event.data[:-1])
+                    event_found = "target" in data and data["target"] == expected_event
+                except StopIteration:
+                    logging.warning("Iterator without events. Reseting connection...")
+                    connection_active = False
+                except FunctionTimedOut:
+                    connection_active = False
                     logging.warning("No event received after 60 seconds. Reseting connection")
-                    # client.close()    # It hangs if the connection is not available...
-                    break
-
-                if max_datetime and datetime.datetime.now() > max_datetime:
-                    timeout = True
-                    break
-
-                data = json.loads(event.data[:-1])
-                event_found = "target" in data and data["target"] == expected_event
+                    try:
+                        func_timeout(5, client.close)
+                    except FunctionTimedOut:
+                        logging.warning("Timeout closing the SSE client")
+        
+        return event_found
 
     def _send_sse_command(self, connection_token, command):
         headers = {**_HEADERS, **{"Content-Type": "text/plain"}}

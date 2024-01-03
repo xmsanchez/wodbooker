@@ -12,3 +12,4 @@ iterators==0.2.0
 pause==0.3
 pytz==2023.3.post1
 flask-babelex==0.9.4
+func-timeout==4.3.5
