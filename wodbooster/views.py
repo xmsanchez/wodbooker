@@ -131,7 +131,7 @@ class BookingAdmin(sqla.ModelView):
         query = super().get_query()
         query = query.filter_by(user_id=login.current_user.id)
         return query
-    
+
     def get_one(self, id):
         result = super().get_one(id)
         if result.user_id != login.current_user.id:
@@ -140,7 +140,7 @@ class BookingAdmin(sqla.ModelView):
 
     def is_accessible(self):
         return login.current_user.is_authenticated
-    
+
     def update_model(self, form, model):
         if login.current_user.is_authenticated and model.user_id != login.current_user.id:
             flash("No estás autorizado a editar este elemento", "warning")  # Mensaje de advertencia

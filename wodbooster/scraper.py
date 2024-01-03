@@ -51,7 +51,7 @@ class Scraper():
         """
         if self.logged:
             return
-        
+
         if self._cookie:
             self._session.cookies.update(pickle.loads(self._cookie))
             road_to_box_request = self._session.get("https://wodbuster.com/account/roadtobox.aspx",
@@ -173,7 +173,7 @@ class Scraper():
                 _id = class_details['Id']
                 if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
                     raise ClassIsFull("Class is full")
-                
+
                 book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
                 return book_result['Res']['EsCorrecto']
 
@@ -238,7 +238,7 @@ class Scraper():
             if not look_up:
                 raise InvalidBox("Provided URL is not accesible for the given user")
             self._box_name_by_url[url] = look_up.group(1)
-        
+
         box_name = self._box_name_by_url[url]
         event_found = False
         timeout = False
@@ -282,7 +282,7 @@ class Scraper():
                         func_timeout(5, client.close)
                     except FunctionTimedOut:
                         logging.warning("Timeout closing the SSE client")
-        
+
         return event_found
 
     def _send_sse_command(self, connection_token, command):

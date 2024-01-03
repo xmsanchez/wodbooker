@@ -40,7 +40,7 @@ class Booker:
         self._booking_id = booking.id
         self._session = None
         self._app_context = app_context
-    
+
     def stop(self) -> None:
         """
         Stops the booker. If the booker is waiting for an event, the booker will be stopped
@@ -80,7 +80,7 @@ class Booker:
                                             self._booking.user.email, datetime_to_book)
                             self._set_booking_status("La clase no se ha podido reservar por un motivo desconocido. Se ignora esta semana y se intentará reservar para el mismo día de la siguiente semana")
                             errors = 0
-                    
+
                     self._booking.last_book_date = day_to_book
                     self._booking.booked_at = datetime.now().replace(microsecond=0)
                     self._booking.user.cookie = scraper.get_cookies()
@@ -129,7 +129,7 @@ class Booker:
                 logging.info("Exiting because thread is marked as inactive")
         except Exception:
             logging.exception("Unexpected error while booking. Aborting...")
-    
+
     def _set_booking_status(self, new_status: str) -> None:
         split_sep = '\n'
         previous_status = self._booking.status.split(split_sep) if self._booking.status else []
