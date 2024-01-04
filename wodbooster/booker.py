@@ -18,14 +18,33 @@ __CURRENT_THREADS = {
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
     """ 
-    Get the next date for a given weekday
+    Get the next date for a given weekday. If the weekday is the same as the base date, the base date is returned
     :param base_date: The base date to start the search
     :param weekday: The weekday to search 
     """
     days_ahead = weekday - base_date.weekday()
-    if days_ahead <= 0:
+    if days_ahead < 0:
         days_ahead += 7
     return base_date + timedelta(days_ahead)
+
+
+def _get_datetime_to_book(last_booking_date: date, dow: int, booking_time: time) -> datetime:
+    """
+    Get the day to book for a given date and day of week
+    :param last_booking_date: The last booking date
+    :param dow: The day of week
+    :param booking_time: The time to book
+    :return: The datetime to book
+    """
+    now = datetime.now(_MADRID_TZ)
+    base_date = now.date() if not last_booking_date else last_booking_date + timedelta(days=1)
+    day_to_book = _get_next_date_for_weekday(base_date, dow)
+    datetime_to_book = _MADRID_TZ.localize(datetime.combine(day_to_book, booking_time))
+
+    if now > datetime_to_book:
+        day_to_book = _get_next_date_for_weekday(now.date(), dow)
+
+    return datetime_to_book
 
 
 class _StopThreadException(BaseException):
@@ -52,23 +71,44 @@ class Booker(StoppableThread):
             self._booking = db.session.query(Booking).filter_by(id=self._booking_id).first()
             errors = 0
             force_exit = False
+            wait_for_event = None
+            wait_for_datetime = None
+            datetime_to_book = None
             while errors < 5 and not force_exit:
                 try:
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
-                    current_date = self._booking.last_book_date or date.today()
-                    day_to_book = _get_next_date_for_weekday(current_date, self._booking.dow)
-                    datetime_to_book = datetime.combine(day_to_book, time(self._booking.time.hour, self._booking.time.minute, 0))
+                    book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
+                    _datetime_to_book = _get_datetime_to_book(self._booking.last_book_date, self._booking.dow, book_time)
+                    if (wait_for_datetime or wait_for_event) and datetime_to_book != _datetime_to_book:
+                        logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M'))
+                        self._set_booking_status(f"La clase del {datetime_to_book.strftime('%d/%m/%Y')} ya ha pasado y no se pudo reservar. Comenzando reserva para el {_datetime_to_book.strftime('%d/%m/%Y')}")
+                        wait_for_event = None
+                        wait_for_datetime = None
+                    datetime_to_book = _datetime_to_book
+                    day_to_book = datetime_to_book.date()
 
                     book_available_at = _MADRID_TZ.localize(
                         datetime.combine(
                             day_to_book - timedelta(days=self._booking.offset),
                             self._booking.available_at))
 
-                    if book_available_at > datetime.now(_MADRID_TZ):
-                        logging.info("Waiting until %s", book_available_at.strftime('%d/%m/%Y %H:%M'))
-                        self._set_booking_status(f"Esperando hasta el {book_available_at.strftime('%d/%m/%Y a las %H:%M')} cuando las reservas para el {day_to_book.strftime('%d/%m/%Y')} estén disponibles")
-                        pause.until(book_available_at)
+                    wait_for_datetime = wait_for_datetime or book_available_at
+                    if wait_for_datetime and wait_for_datetime > datetime.now(_MADRID_TZ):
+                        logging.info("Waiting until %s", wait_for_datetime.strftime('%d/%m/%Y %H:%M'))
+                        self._set_booking_status(f"Esperando hasta el {wait_for_datetime.strftime('%d/%m/%Y a las %H:%M')} cuando las reservas para el {day_to_book.strftime('%d/%m/%Y')} estén disponibles")
+                        pause.until(wait_for_datetime)
+                    wait_for_datetime = None
+
+                    if wait_for_event:
+                        logging.info("Waiting with SSE for event %s", wait_for_event)
+                        if wait_for_event == "changedPizarra":
+                            self._set_booking_status(f"La clase del {day_to_book.strftime('%d/%m/%Y')} está llena. Esperando a que haya plazas disponibles")
+                        elif wait_for_event == "changedBooking":
+                            self._set_booking_status(f"Esperando a que haya plazas disponibles para el {day_to_book.strftime('%d/%m/%Y')} a las {datetime_to_book.strftime('%H:%M')}")
+
+                        scraper.wait_until_event(self._booking.url, day_to_book, wait_for_event, datetime_to_book)
+                        wait_for_event = None
 
                     if scraper.book(self._booking.url, datetime_to_book):
                         logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
@@ -85,19 +125,15 @@ class Booker(StoppableThread):
                     self._booking.user.cookie = scraper.get_cookies()
                     db.session.commit()
                 except ClassIsFull:
-                    logging.info("Class is full. Waiting until there are available slots with SSE")
-                    self._set_booking_status(f"La clase del {day_to_book.strftime('%d/%m/%Y')} está llena. Esperando a que haya plazas disponibles")
-                    scraper.wait_until_event(self._booking.url, day_to_book, 'changedBooking', datetime_to_book)
+                    logging.info("Class is full. Setting wait for event to 'changedBooking'")
+                    wait_for_event = 'changedBooking'
                 except BookingNotAvailable as e:
                     if e.available_at:
-                        logging.info("Class is not bookeable yet. Waiting until %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
-                        self._set_booking_status(f"Esperando hasta el {e.available_at.strftime('%d/%m/%Y a las %H:%M')} cuando las reservas para el {day_to_book.strftime('%d/%m/%Y')} estén disponibles")
-                        pause.until(e.available_at)
+                        logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
+                        wait_for_datetime = e.available_at
                     else:
-                        logging.info("Classes for %s are not loaded yet. Waiting for classes to be loaded with SSE", day_to_book.strftime('%d/%m/%Y'))
-                        self._set_booking_status(f"Esperando a que las clases del día {day_to_book.strftime('%d/%m/%Y')} estén cargadas")
-                        scraper.wait_until_event(self._booking.url, day_to_book, 'changedPizarra', datetime_to_book)
-
+                        logging.info("Classes for %s are not loaded yet. Setting wait for event to 'changedPizarra'", day_to_book.strftime('%d/%m/%Y'))
+                        wait_for_event = 'changedPizarra'
                     continue
                 except RequestException as e:
                     sleep_for = (errors + 1) * 60
