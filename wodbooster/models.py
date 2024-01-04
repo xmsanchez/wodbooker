@@ -1,9 +1,13 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 db = SQLAlchemy()
 
 
 class Booking(db.Model):
+
+    STATUS_SEPARATOR = '\n'
+
     id = db.Column(db.Integer, primary_key=True)
     dow = db.Column(db.Integer)
     time = db.Column(db.Time)
@@ -15,6 +19,18 @@ class Booking(db.Model):
     url = db.Column(db.String(128))
     available_at = db.Column(db.Time)
     offset = db.Column(db.Integer)
+
+    def add_status(self, new_status: str) -> None:
+        """
+        Add a new status to the booking. If the status is the same as the last one, it is not added.
+        :param new_status: The new status to add
+        """
+        previous_status = self.status.split(self.STATUS_SEPARATOR) if self.status else []
+        if not previous_status or new_status not in previous_status[-1]:
+            current_date = datetime.now().strftime('%d/%m/%Y %H:%M')
+            updated_status = previous_status[-10:] + [f"{current_date}: {new_status}"]
+            self.status = self.STATUS_SEPARATOR.join(updated_status)
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
