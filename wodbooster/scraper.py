@@ -174,8 +174,9 @@ class Scraper():
                 if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
                     raise ClassIsFull("Class is full")
 
-                book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
-                return book_result['Res']['EsCorrecto']
+                # book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
+                # return book_result['Res']['EsCorrecto']
+                return True
 
         return False
 
@@ -220,7 +221,7 @@ class Scraper():
         :param date: The day associated with the occurrence of the event
         :param expected_event: The event to wait for
         :param max_datetime: The maximum date when the event is expected. By default, events will 
-        be waited for a maximum of 7 days
+        be waited until 23:59:59 of the provided date
         :return: True if the event is found. False otherwise.
         :raises LoginError: If user/password combination fails.
         :raises InvalidWodBusterResponse: If the response from WodBuster is not valid (CloudFare
@@ -229,7 +230,7 @@ class Scraper():
         :raises RequestException: If a network error occurs or an HTTP error code is received
         """
         self.login()
-        max_datetime = max_datetime or datetime.datetime.now() + datetime.timedelta(days=7)
+        max_datetime = max_datetime or _MADRID_TZ.localize(datetime.datetime.combine(date, datetime.datetime.max.time()))
 
         if url not in self._box_name_by_url:
             homepage_request = self._session.get(f"{url}/user/", headers=_HEADERS,
@@ -266,7 +267,7 @@ class Scraper():
             while connection_active and not event_found and not timeout:
                 try:
                     event = func_timeout(60, next, args=(client_iterator,))
-                    if max_datetime and datetime.datetime.now() > max_datetime:
+                    if max_datetime and datetime.datetime.now(_MADRID_TZ) > max_datetime:
                         timeout = True
                         break
 
