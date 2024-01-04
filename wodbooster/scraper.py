@@ -250,7 +250,7 @@ class Scraper():
             connection_token = negotiate_request.json()["connectionToken"]
             headers = {**_HEADERS, **{"Accept": "text/event-stream"}}
             booking_hub_request = self._session.get(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
-                                                    stream=True, headers=headers)
+                                                    stream=True, headers=headers, timeout=20)
 
             self._send_sse_command(connection_token, {"protocol":"json","version":1})
             midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
@@ -266,7 +266,7 @@ class Scraper():
             connection_active = True
             while connection_active and not event_found and not timeout:
                 try:
-                    event = func_timeout(60, next, args=(client_iterator,))
+                    event = next(client_iterator)
                     if max_datetime and datetime.datetime.now(_MADRID_TZ) > max_datetime:
                         timeout = True
                         break
@@ -276,13 +276,10 @@ class Scraper():
                 except StopIteration:
                     logging.warning("Iterator without events. Reseting connection...")
                     connection_active = False
-                except FunctionTimedOut:
+                except requests.exceptions.ConnectionError:
                     connection_active = False
                     logging.warning("No event received after 60 seconds. Reseting connection")
-                    try:
-                        func_timeout(5, client.close)
-                    except FunctionTimedOut:
-                        logging.warning("Timeout closing the SSE client")
+                    client.close()
 
         return event_found
 
