@@ -250,7 +250,7 @@ class Scraper():
             connection_token = negotiate_request.json()["connectionToken"]
             headers = {**_HEADERS, **{"Accept": "text/event-stream"}}
             booking_hub_request = self._session.get(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
-                                                    stream=True, headers=headers, timeout=20)
+                                                    stream=True, headers=headers, timeout=60)
 
             self._send_sse_command(connection_token, {"protocol":"json","version":1})
             midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
