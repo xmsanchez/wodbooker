@@ -103,9 +103,9 @@ class Booker(StoppableThread):
                     if wait_for_event:
                         logging.info("Waiting with SSE for event %s", wait_for_event)
                         if wait_for_event == "changedPizarra":
-                            self._set_booking_status(f"La clase del {day_to_book.strftime('%d/%m/%Y')} está llena. Esperando a que haya plazas disponibles")
+                            self._set_booking_status(f"Esperando a que las clases del día {day_to_book.strftime('%d/%m/%Y')} estén cargadas")
                         elif wait_for_event == "changedBooking":
-                            self._set_booking_status(f"Esperando a que haya plazas disponibles para el {day_to_book.strftime('%d/%m/%Y')} a las {datetime_to_book.strftime('%H:%M')}")
+                            self._set_booking_status(f"La clase del {day_to_book.strftime('%d/%m/%Y')} está llena. Esperando a que haya plazas disponibles")
 
                         scraper.wait_until_event(self._booking.url, day_to_book, wait_for_event, datetime_to_book)
                         wait_for_event = None
