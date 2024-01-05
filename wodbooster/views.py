@@ -143,7 +143,7 @@ class BookingAdmin(sqla.ModelView):
 
     def update_model(self, form, model):
         if login.current_user.is_authenticated and model.user_id != login.current_user.id:
-            flash("No estás autorizado a editar este elemento", "warning")  # Mensaje de advertencia
+            flash("No estás autorizado a editar este elemento", "warning")
             return False
 
         stop_booking_loop(model)
@@ -174,8 +174,8 @@ class BookingAdmin(sqla.ModelView):
         form = super().create_form(obj)
         last_booking = db.session.query(Booking).filter_by(user=login.current_user).order_by(Booking.id.desc()).first()
         if last_booking:
-            form.url.data = last_booking.url
-            form.offset.data = last_booking.offset
-            form.available_at.data = last_booking.available_at
+            form.url.data = form.url.data or last_booking.url
+            form.offset.data = form.offset.data or last_booking.offset
+            form.available_at.data = form.available_at.data or last_booking.available_at
 
         return form
