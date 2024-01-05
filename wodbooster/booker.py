@@ -10,7 +10,7 @@ from requests.exceptions import RequestException
 from .scraper import get_scraper, Scraper
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox
-from .models import db, Booking
+from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
@@ -96,7 +96,9 @@ class Booker(StoppableThread):
                     _datetime_to_book = _get_datetime_to_book(self._booking.last_book_date, self._booking.dow, book_time)
                     if waiter and datetime_to_book != _datetime_to_book:
                         logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M'))
-                        self._booking.add_status(_CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
+                        event = Event(booking_id=self._booking.id,
+                                      event=_CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
+                        db.session.add(event)
                         waiter = None
                     datetime_to_book = _datetime_to_book
                     day_to_book = datetime_to_book.date()
@@ -116,12 +118,14 @@ class Booker(StoppableThread):
 
                     if scraper.book(self._booking.url, datetime_to_book):
                         logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
-                        self._booking.add_status(_BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
+                        event = Event(booking_id=self._booking.id, event=_BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
+                        db.session.add(event)
                         errors = 0
                     else:
                         logging.warning("Impossible to book classes for %s for %s. Class is already booked or user cannot book. Igoning week and attempting booking for next week",
                                         self._booking.user.email, datetime_to_book)
-                        self._booking.add_status(_UNKNOWN_BOOKING_ERROR)
+                        event = Event(booking_id=self._booking.id, event=_UNKNOWN_BOOKING_ERROR)
+                        db.session.add(event)
                         errors = 0
 
                     self._booking.last_book_date = day_to_book
@@ -145,27 +149,32 @@ class Booker(StoppableThread):
                 except RequestException as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Request Exception: %s", e)
-                    self._booking.add_status(_UNEXPECTED_NETWORK_ERROR % sleep_for)
+                    event = Event(booking_id=self._booking.id, event=_UNEXPECTED_NETWORK_ERROR % sleep_for)
+                    db.session.add(event)
                     errors += 1
                     pause.seconds(sleep_for)
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Invalid WodBuster response: %s", e)
-                    self._booking.add_status(_UNEXPECTED_WODBUSTER_RESPONSE % sleep_for)
+                    event = Event(booking_id=self._booking.id, event=_UNEXPECTED_WODBUSTER_RESPONSE % sleep_for)
+                    db.session.add(event)
                     errors += 1
                     pause.seconds(sleep_for)
                 except PasswordRequired:
                     force_exit = True
                     logging.warning("Credentials for user %s are outdated. Aborting...", self._booking.user.email)
-                    self._booking.add_status(_CREDENTIALS_EXPIRED)
+                    event = Event(booking_id=self._booking.id, event=_CREDENTIALS_EXPIRED)
+                    db.session.add(event)
                 except LoginError:
                     force_exit = True
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
-                    self._booking.add_status(_LOGIN_FAILED)
+                    event = Event(booking_id=self._booking.id, event=_LOGIN_FAILED)
+                    db.session.add(event)
                 except InvalidBox:
                     force_exit = True
                     logging.warning("User %s accessing to an invalid box detected. Aborting...", self._booking.user.email)
-                    self._booking.add_status(_INVALID_BOX_URL)
+                    event = Event(booking_id=self._booking.id, event=_INVALID_BOX_URL)
+                    db.session.add(event)
                 finally:
                     db.session.commit()
 
@@ -216,7 +225,8 @@ class _TimeWaiter(_Waiter):
         """
         if self._wait_datetime > datetime.now(_MADRID_TZ):
             logging.info("Waiting until %s", self._wait_datetime.strftime('%d/%m/%Y %H:%M'))
-            self.booking.add_status(self.log_message)
+            event = Event(booking_id=self.booking.id, event=self.log_message)
+            db.session.add(event)
             db.session.commit()
             pause.until(self._wait_datetime)
 
@@ -246,8 +256,8 @@ class _EventWaiter(_Waiter):
         """
         Wait until the event occurs
         """
-        self.booking.add_status(self.log_message)
-        db.session.commit()
+        event = Event(booking_id=self.booking.id, event=self.log_message)
+        db.session.add(event)
         self._scraper.wait_until_event(self._url, self._event_date, self._expected_event,
                                        self._max_datetime)
 

@@ -8,12 +8,14 @@ from flask_admin import AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
 from requests.exceptions import RequestException
 from sqlalchemy import and_
-from .models import User, db, Booking
+from .models import User, db, Booking, Event
 from .booker import start_booking_loop, stop_booking_loop
 from .scraper import refresh_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse
 
 _DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+_NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí " + \
+        "cuando la reserva esté activa según vayan ocurriendo."
 
 
 class LoginForm(form.Form):
@@ -100,6 +102,7 @@ class BookingForm(form.Form):
     url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)')
     offset = fields.IntegerField('Días de antelación para reservar')
     available_at = TimeField('Hora de apertura de reservas')
+    is_active = fields.BooleanField('Activo', default=True)
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(
@@ -111,21 +114,31 @@ class BookingForm(form.Form):
                 Booking.id!=request.args.get('id'))).first():
             raise validators.ValidationError("Ya existe una reserva para ese día de la semana, hora y box")
 
+
+def _parse_events(v, c, m, p):
+    events = m.events
+    if events:
+        parsed_events = [f"<li>{x.date.strftime('%d/%m/%Y %H:%M')}: {x.event}</li>" for x in events]
+        parsed_events = "<ul>" + "".join(parsed_events) + "</ul>"
+        parsed_events = Markup(parsed_events)
+    else:
+        parsed_events = Markup(f"<i>{_NO_EVENTS}</i>")
+    
+    return parsed_events
+
+
 class BookingAdmin(sqla.ModelView):
     form = BookingForm
 
-    column_labels = dict(dow='Día de la semana', time='Hora', status='Estado')
-    column_list = ('dow', 'time', 'status')
+    column_labels = dict(dow='Día de la semana', time='Hora', events='Eventos',
+                         url='Box', is_active='Activo')
+    column_list = ('dow', 'time', 'is_active', 'url', 'events')
 
-    def get_list(self, *args, **kwargs):
-        count, data = super(BookingAdmin, self).get_list(*args, **kwargs)
-        for item in data:
-            item.dow = _DAYS_OF_WEEK[item.dow]
-            status = item.status.split('\n') if item.status else []
-            status = list(map(lambda x: f'<li>{x}</li>', status))
-            status = "<ul>" + "".join(status) + "</ul>"
-            item.status = Markup(status)
-        return count, data
+    column_formatters = dict(
+        dow=lambda v, c, m, p: _DAYS_OF_WEEK[m.dow],
+        url=lambda v, c, m, p: Markup(f'<a href="{m.url}">{m.url.split("/")[2].split(".")[0]}</a>'),
+        events=_parse_events,
+    )
 
     def get_query(self):
         query = super().get_query()
@@ -148,7 +161,8 @@ class BookingAdmin(sqla.ModelView):
 
         stop_booking_loop(model)
         returned_value = super().update_model(form, model)
-        start_booking_loop(model)
+        if model.is_active:
+            start_booking_loop(model)
         return returned_value
 
     def delete_model(self, model):
@@ -167,7 +181,8 @@ class BookingAdmin(sqla.ModelView):
         booking.user = login.current_user
         db.session.flush()
         db.session.commit()
-        start_booking_loop(booking)
+        if booking.is_active:
+            start_booking_loop(booking)
         return booking
 
     def create_form(self, obj=None):
