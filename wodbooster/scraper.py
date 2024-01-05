@@ -264,21 +264,21 @@ class Scraper():
 
             connection_active = True
             while connection_active and not event_found and not timeout:
-                try:
-                    event = next(client_iterator)
-                    if max_datetime and datetime.datetime.now(_MADRID_TZ) > max_datetime:
-                        timeout = True
-                        break
+                if max_datetime and datetime.datetime.now(_MADRID_TZ) > max_datetime:
+                    timeout = True
+                else:
+                    try:
+                        event = next(client_iterator)
+                        data = json.loads(event.data[:-1])
+                        event_found = "target" in data and data["target"] == expected_event
+                    except StopIteration:
+                        logging.warning("Iterator without events. Reseting connection...")
+                        connection_active = False
+                    except requests.exceptions.ConnectionError:
+                        connection_active = False
+                        logging.warning("No event received after 60 seconds. Reseting connection")
 
-                    data = json.loads(event.data[:-1])
-                    event_found = "target" in data and data["target"] == expected_event
-                except StopIteration:
-                    logging.warning("Iterator without events. Reseting connection...")
-                    connection_active = False
-                except requests.exceptions.ConnectionError:
-                    connection_active = False
-                    logging.warning("No event received after 60 seconds. Reseting connection")
-                    client.close()
+            client.close()
 
         return event_found
 
