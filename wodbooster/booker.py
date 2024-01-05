@@ -258,6 +258,7 @@ class _EventWaiter(_Waiter):
         """
         event = Event(booking_id=self.booking.id, event=self.log_message)
         db.session.add(event)
+        db.session.commit()
         self._scraper.wait_until_event(self._url, self._event_date, self._expected_event,
                                        self._max_datetime)
 
