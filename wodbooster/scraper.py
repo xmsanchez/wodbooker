@@ -6,7 +6,6 @@ import json
 import requests
 import sseclient
 import pytz
-from func_timeout import func_timeout, FunctionTimedOut
 from bs4 import BeautifulSoup
 from .exceptions import LoginError, InvalidWodBusterResponse, \
     BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox
@@ -227,6 +226,7 @@ class Scraper():
         protection, etc.)
         :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
         :raises RequestException: If a network error occurs or an HTTP error code is received
+        :raises InvalidBox: If box name cannot be determined from the provided URL
         """
         self.login()
         max_datetime = max_datetime or _MADRID_TZ.localize(datetime.datetime.combine(date, datetime.datetime.max.time()))
@@ -236,7 +236,7 @@ class Scraper():
                                                  allow_redirects=False, timeout=10)
             look_up = re.search(r"InitAjax\('([^']*)',", homepage_request.text)
             if not look_up:
-                raise InvalidBox("Provided URL is not accesible for the given user")
+                raise InvalidBox("Couldn't determine box name from URL")
             self._box_name_by_url[url] = look_up.group(1)
 
         box_name = self._box_name_by_url[url]
