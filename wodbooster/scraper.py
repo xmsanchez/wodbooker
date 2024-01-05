@@ -174,9 +174,8 @@ class Scraper():
                 if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
                     raise ClassIsFull("Class is full")
 
-                # book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
-                # return book_result['Res']['EsCorrecto']
-                return True
+                book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
+                return book_result['Res']['EsCorrecto']
 
         return False
 
