@@ -8,8 +8,8 @@ from flask_admin import Admin
 import flask_login as login
 from flask_admin.contrib import sqla
 from flask_babelex import Babel
-from .views import MyAdminIndexView, BookingAdmin
-from .models import User, Booking, db
+from .views import MyAdminIndexView, BookingAdmin, EventView
+from .models import User, Booking, Event, db
 from .booker import start_booking_loop
 
 # Configure logging
@@ -68,6 +68,7 @@ admin = Admin(app, name='WodBooster', index_view=MyAdminIndexView(),
 
 # Add views
 admin.add_view(BookingAdmin(Booking, db.session, 'Reservas'))
+admin.add_view(EventView(Event, db.session, 'Eventos'))
 
 # Start booking loop
 with app.app_context():

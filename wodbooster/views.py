@@ -117,12 +117,12 @@ class BookingForm(form.Form):
 
 def _parse_events(v, c, m, p):
     events = m.events
-    events = events[-10:]
+    events = events[-3:]
     events = [x for i, x in enumerate(events) if i == 0 or x.event != events[i-1].event]
     if events:
         parsed_events = [f"<li>{x.date.strftime('%d/%m/%Y %H:%M')}: {x.event}</li>" for x in events]
         parsed_events = "<ul>" + "".join(parsed_events) + "</ul>"
-        parsed_events = Markup(parsed_events)
+        parsed_events = Markup(parsed_events + f'<a class="float-right" href="/admin/event/?search={m.id}"><i>Ver todos ≫</i></a>')
     else:
         parsed_events = Markup(f"<i>{_NO_EVENTS}</i>")
     
@@ -132,7 +132,7 @@ def _parse_events(v, c, m, p):
 class BookingAdmin(sqla.ModelView):
     form = BookingForm
 
-    column_labels = dict(dow='Día de la semana', time='Hora', events='Eventos',
+    column_labels = dict(dow='Día de la semana', time='Hora', events='Últimos eventos',
                          url='Box', is_active='Activo')
     column_list = ('dow', 'time', 'is_active', 'url', 'events')
 
@@ -196,3 +196,37 @@ class BookingAdmin(sqla.ModelView):
             form.available_at.data = form.available_at.data or last_booking.available_at
 
         return form
+
+
+class EventView(sqla.ModelView):
+    column_list = ('booking', 'date', 'event')
+    column_labels = dict(booking='Reserva', date='Fecha y Hora', event='Mensaje')
+    can_create = False
+    can_delete = False
+    can_edit = False
+    
+
+    column_searchable_list = ('booking_id',)
+
+    column_formatters = dict(
+        booking=lambda v, c, m, p: _DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M'),
+        date=lambda v, c, m, p: m.date.strftime('%d/%m/%Y %H:%M'),
+    )
+
+    def get_query(self):
+        query = super().get_query()
+        query = query.join(Booking).filter(Booking.user_id==login.current_user.id)
+        return query
+
+    def get_one(self, id):
+        result = super().get_one(id)
+        if result.booking.user_id != login.current_user.id:
+            return None
+        return result
+
+    def is_accessible(self):
+        return login.current_user.is_authenticated
+
+    def inaccessible_callback(self, name, **kwargs):
+        # redirect to login page if user doesn't have access
+        return redirect(url_for('admin.login_view', next=request.url))
