@@ -1,4 +1,7 @@
 import os
+from datetime import datetime, timedelta
+import time
+import threading
 import os.path as op
 import logging
 from flask import Flask, redirect, request, session
@@ -75,3 +78,15 @@ with app.app_context():
     bookings = db.session.query(Booking).all()
     for booking in bookings:
         start_booking_loop(booking)
+
+# Start events cleaning loop
+def cleaning_loop(app_context):
+    app_context.push()
+    with app_context:
+        while True:
+            db.session.query(Event).filter(Event.date < datetime.now() - timedelta(days=15)).delete()
+            db.session.commit()
+            time.sleep(60 * 60 * 24)
+
+thread = threading.Thread(target=cleaning_loop, args=(app.app_context(),))
+thread.start()
