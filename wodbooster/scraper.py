@@ -211,13 +211,13 @@ class Scraper():
         except requests.exceptions.RequestException as e:
             raise InvalidWodBusterResponse('WodBuster returned a non expected response') from e
 
-    def wait_until_event(self, url: str, date: datetime.date, expected_event:str,
+    def wait_until_event(self, url: str, date: datetime.date, expected_events:list,
                          max_datetime: datetime=None) -> bool:
         """ 
         Wait until a specific event is received for a given day
         :param url: The WodBuster URL associated to the box where the event will be received
         :param date: The day associated with the occurrence of the event
-        :param expected_event: The event to wait for
+        :param expected_events: The list of event to wait for
         :param max_datetime: The maximum date when the event is expected. By default, events will 
         be waited until 23:59:59 of the provided date
         :return: True if the event is found. False otherwise.
@@ -272,7 +272,7 @@ class Scraper():
                     try:
                         event = next(client_iterator)
                         data = json.loads(event.data[:-1])
-                        event_found = "target" in data and data["target"] == expected_event
+                        event_found = "target" in data and data["target"] in expected_events
                     except StopIteration:
                         logging.warning("Iterator without events. Reseting connection...")
                         connection_active = False

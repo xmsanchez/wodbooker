@@ -134,7 +134,7 @@ class Booker(StoppableThread):
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, _CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
-                                          scraper, self._booking.url, day_to_book, 'changedBooking', datetime_to_book)
+                                          scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingNotAvailable as e:
                     if e.available_at:
                         logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
@@ -142,9 +142,10 @@ class Booker(StoppableThread):
                                                                                                   day_to_book.strftime('%d/%m/%Y')),
                                                        e.available_at)
                     else:
-                        logging.info("Classes for %s are not loaded yet. Setting wait for event to 'changedPizarra'", day_to_book.strftime('%d/%m/%Y'))
+                        logging.info("Classes for %s are not loaded yet. Waiting for any type of event", day_to_book.strftime('%d/%m/%Y'))
                         waiter = _EventWaiter(self._booking, _WAIT_CLASS_LOADED % day_to_book.strftime('%d/%m/%Y'),
-                                              scraper, self._booking.url, day_to_book, 'changedPizarra', datetime_to_book)
+                                              scraper, self._booking.url, day_to_book, 
+                                              ['changedPizarra', 'changedBooking'], datetime_to_book)
                     continue
                 except RequestException as e:
                     sleep_for = (errors + 1) * 60
@@ -233,8 +234,8 @@ class _TimeWaiter(_Waiter):
 
 class _EventWaiter(_Waiter):
 
-    def __init__(self, booking: Booking, log_message: str, scraper: Scraper, url: str, 
-                 event_date: date, expected_event:str, max_datetime: datetime=None):
+    def __init__(self, booking: Booking, log_message: str, scraper: Scraper, url: str,
+                 event_date: date, expected_events:list, max_datetime: datetime=None):
         """
         Event Waiter construction
         :param booking: The booking the waiter is related to
@@ -242,14 +243,14 @@ class _EventWaiter(_Waiter):
         :param scraper: The scraper to use
         :param url: The WodBuster URL
         :param date: The day associated with the occurrence of the event
-        :param expected_event: The expected event
+        :param expected_events: A list with the expected events
         :param max_datetime: The maximum datetime to wait for
         """
         super().__init__(booking, log_message)
         self._scraper = scraper
         self._url = url
         self._event_date = event_date
-        self._expected_event = expected_event
+        self._expected_events = expected_events
         self._max_datetime = max_datetime
 
     def wait(self):
@@ -259,7 +260,7 @@ class _EventWaiter(_Waiter):
         event = Event(booking_id=self.booking.id, event=self.log_message)
         db.session.add(event)
         db.session.commit()
-        self._scraper.wait_until_event(self._url, self._event_date, self._expected_event,
+        self._scraper.wait_until_event(self._url, self._event_date, self._expected_events,
                                        self._max_datetime)
 
 
