@@ -16,7 +16,6 @@ _HEADERS = {
 
 _UTC_TZ = pytz.timezone('UTC')
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
-_SSE_SERVER = "https://sr-2-0.wodbuster.com"
 _WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE = "WodBuster is not accepting more requests at this time. Try again in a minute"
 
 
@@ -32,6 +31,7 @@ class Scraper():
         self._session = requests.Session()
         self._cookie = cookie
         self._box_name_by_url = {}
+        self._sse_server_by_url = {}
 
     def get_cookies(self) -> bytes:
         """
@@ -234,30 +234,32 @@ class Scraper():
         if url not in self._box_name_by_url:
             homepage_request = self._session.get(f"{url}/user/", headers=_HEADERS,
                                                  allow_redirects=False, timeout=10)
-            look_up = re.search(r"InitAjax\('([^']*)',", homepage_request.text)
+            look_up = re.search(r"InitAjax\('([^']*)',\s?'([^']*)'", homepage_request.text)
             if not look_up:
                 raise InvalidBox("Couldn't determine box name from URL")
             self._box_name_by_url[url] = look_up.group(1)
+            self._sse_server_by_url[url] = look_up.group(2)
 
         box_name = self._box_name_by_url[url]
+        sse_server = self._sse_server_by_url[url]
         event_found = False
         timeout = False
 
         while not event_found and not timeout:
-            negotiate_request = self._session.post(f"{_SSE_SERVER}/bookinghub/negotiate?negotiateVersion=1",
+            negotiate_request = self._session.post(f"{sse_server}/bookinghub/negotiate?negotiateVersion=1",
                                         headers=_HEADERS, timeout=10)
             connection_token = negotiate_request.json()["connectionToken"]
             headers = {**_HEADERS, **{"Accept": "text/event-stream"}}
-            booking_hub_request = self._session.get(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
+            booking_hub_request = self._session.get(f"{sse_server}/bookinghub?id={connection_token}",
                                                     stream=True, headers=headers, timeout=60)
 
-            self._send_sse_command(connection_token, {"protocol":"json","version":1})
+            self._send_sse_command(sse_server, connection_token, {"protocol":"json","version":1})
             midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
             epoch = int(midnight.timestamp())
-            self._send_sse_command(connection_token, {"arguments": [box_name, str(epoch)],
-                                                      "invocationId":"0",
-                                                      "target":"JoinRoom",
-                                                      "type":1})
+            self._send_sse_command(sse_server, connection_token, {"arguments": [box_name, str(epoch)],
+                                                                  "invocationId":"0",
+                                                                  "target":"JoinRoom",
+                                                                  "type":1})
 
             client = sseclient.SSEClient(booking_hub_request)
             client_iterator = client.events()
@@ -282,10 +284,10 @@ class Scraper():
 
         return event_found
 
-    def _send_sse_command(self, connection_token, command):
+    def _send_sse_command(self, sse_server, connection_token, command):
         headers = {**_HEADERS, **{"Content-Type": "text/plain"}}
         command_str = json.dumps(command) + "\u001e"
-        self._session.post(f"{_SSE_SERVER}/bookinghub?id={connection_token}",
+        self._session.post(f"{sse_server}/bookinghub?id={connection_token}",
                            data=command_str, headers=headers, timeout=10)
 
 
