@@ -117,8 +117,8 @@ class BookingForm(form.Form):
 
 def _parse_events(v, c, m, p):
     events = m.events
-    events = events[-3:]
     events = [x for i, x in enumerate(events) if i == 0 or x.event != events[i-1].event]
+    events = events[-3:]
     if events:
         parsed_events = [f"<li>{x.date.strftime('%d/%m/%Y %H:%M')}: {x.event}</li>" for x in events]
         parsed_events = "<ul>" + "".join(parsed_events) + "</ul>"
