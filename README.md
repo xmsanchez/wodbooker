@@ -20,6 +20,8 @@ Once the request is created, a thread will take care of it by:
 4. If the day has been loaded but booking is not available yet, the thread will wait unitl the class is available. 
 5. Once the booking has been performed, the thread will execute the whole process again for the same day of the next week.
 
+In order to avoid CloudFare restrictions it's highly recommended to create an entry in your `/etc/hosts` file pointing `wodbuster.com` to the final WodBuster server.
+
 ## Webapp
 Run the app by just running:
 
