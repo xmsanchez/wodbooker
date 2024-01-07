@@ -5,7 +5,7 @@ Flask==3.0.0
 Flask-Admin==1.6.1
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
-markupsafe==2.0.1
+Flask-wtf==1.2.1
 requests==2.31.0
 sseclient-py==1.8.0
 pause==0.3
