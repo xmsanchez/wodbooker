@@ -6,9 +6,13 @@ from flask_admin.form.fields import TimeField
 import flask_login as login
 from flask_admin import AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
+from flask_admin.form import SecureForm
 from requests.exceptions import RequestException
 from sqlalchemy import and_
-from .models import User, db, Booking, Event
+from flask_wtf import FlaskForm
+from flask_wtf import Recaptcha
+from flask_wtf.recaptcha import RecaptchaField
+from .models import User, db, Booking
 from .booker import start_booking_loop, stop_booking_loop
 from .scraper import refresh_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse
@@ -18,33 +22,36 @@ _NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos apa
         "cuando la reserva esté activa según vayan ocurriendo."
 
 
-class LoginForm(form.Form):
+class LoginForm(FlaskForm):
     email = fields.StringField(validators=[validators.DataRequired()])
     password = fields.PasswordField(validators=[validators.DataRequired()])
+    recaptcha = RecaptchaField(validators=[Recaptcha("Verifica que no eres un robot")])
 
-    def __init__(self,
-        formdata=None,
-        obj=None,
-        prefix="",
-        data=None,
-        meta=None,
-        **kwargs,
-    ) -> None:
-        super().__init__(formdata, obj, prefix, data, meta, **kwargs)
+    def __init__(self, formdata, **kwargs):
+        super().__init__(formdata=formdata, **kwargs)
         self._scraper = None
 
-    def validate_password(self, field):
+    def validate(self):
+        validation_result = FlaskForm.validate(self)
+        if not validation_result:
+            return False
+
         try:
             self._scraper = refresh_scraper(self.email.data, self.password.data)
-        except LoginError as e:
+        except LoginError:
             logging.exception("Login Error")
-            raise validators.ValidationError("Las credenciales introducidas son incorrectas") from e
-        except InvalidWodBusterResponse as e:
+            self.password.errors.append("Las credenciales introducidas son incorrectas")
+            validation_result = False
+        except InvalidWodBusterResponse:
             logging.exception("Invalid WodBuster Response")
-            raise validators.ValidationError("La respuesta de WodBuster no fue la esperada. Inténtalo de nuevo en unos minutos...") from e
-        except RequestException as e:
+            self.password.errors.append("La respuesta de WodBuster no fue la esperada. Inténtalo de nuevo en unos minutos...")
+            validation_result = False
+        except RequestException:
             logging.exception("Request Error")
-            raise validators.ValidationError("Error inesperado de red al intentar acceder. Inténtalo de nuevo en unos minutos...") from e
+            self.password.errors.append("Error inesperado de red al intentar acceder. Inténtalo de nuevo en unos minutos...")
+            validation_result = False
+
+        return validation_result
 
     def get_user(self):
         existing_user = db.session.query(User).filter_by(email=self.email.data).first()

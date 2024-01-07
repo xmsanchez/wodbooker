@@ -11,6 +11,7 @@ from flask_admin import Admin
 import flask_login as login
 from flask_admin.contrib import sqla
 from flask_babel import Babel
+from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView
 from .models import User, Booking, Event, db
 from .booker import start_booking_loop
@@ -26,9 +27,11 @@ def get_locale():
 # Create application
 app = Flask(__name__)
 babel = Babel(app, locale_selector=get_locale)
+csrf = CSRFProtect()
+csrf.init_app(app)
 
 # Create dummy secrey key so we can use sessions
-app.config['SECRET_KEY'] = '123456790'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '123456790')
 
 # Create in-memory database
 app.config['DATABASE_FILE'] = 'db.sqlite'
@@ -37,6 +40,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['CSRF_ENABLED'] = True
+app.config['RECAPTCHA_PUBLIC_KEY'] = os.environ.get('RECAPTCHA_PUBLIC_KEY')
+app.config['RECAPTCHA_PRIVATE_KEY'] = os.environ.get('RECAPTCHA_PRIVATE_KEY')
 
 # Build a sample db on the fly, if one does not exist yet.
 app_dir = op.realpath(os.path.dirname(__file__))

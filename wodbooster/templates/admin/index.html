@@ -1,4 +1,7 @@
 {% extends 'admin/master.html' %}
+{% block scripts %}
+  <script src='https://www.google.com/recaptcha/api.js' async defer></script>
+{% endblock %}
 {% block body %}
 {{ super() }}
 {% if not current_user.is_authenticated %}
