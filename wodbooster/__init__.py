@@ -10,7 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_admin import Admin
 import flask_login as login
 from flask_admin.contrib import sqla
-from flask_babelex import Babel
+from flask_babel import Babel
 from .views import MyAdminIndexView, BookingAdmin, EventView
 from .models import User, Booking, Event, db
 from .booker import start_booking_loop
@@ -18,15 +18,14 @@ from .booker import start_booking_loop
 # Configure logging
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
 
-# Create application
-app = Flask(__name__)
-babel = Babel(app)
-
-@babel.localeselector
 def get_locale():
     if request.args.get('lang'):
         session['lang'] = request.args.get('lang')
     return session.get('lang', 'es')
+
+# Create application
+app = Flask(__name__)
+babel = Babel(app, locale_selector=get_locale)
 
 # Create dummy secrey key so we can use sessions
 app.config['SECRET_KEY'] = '123456790'
@@ -37,14 +36,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
     app.config['DATABASE_FILE'] + '?check_same_thread=False'
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['CSRF_ENABLED'] = True
 
 # Build a sample db on the fly, if one does not exist yet.
 app_dir = op.realpath(os.path.dirname(__file__))
 database_path = op.join(app_dir, app.config['DATABASE_FILE'])
 if not os.path.exists(database_path):
     db.app = app
-    db.init_app(app)
-    db.create_all()
+    with app.app_context():
+        db.init_app(app)
+        db.create_all()
 else:
     db.init_app(app)
 
