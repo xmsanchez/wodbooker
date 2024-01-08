@@ -25,7 +25,7 @@ class Booking(db.Model):
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     booking_id = db.Column(db.Integer, db.ForeignKey('booking.id'))
-    date = db.Column(db.DateTime, default=datetime.now())
+    date = db.Column(db.DateTime, default=datetime.now)
     event = db.Column(db.String(256))
 
     def __str__(self):
