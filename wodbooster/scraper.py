@@ -55,12 +55,11 @@ class Scraper():
             self._session.cookies.update(pickle.loads(self._cookie))
             road_to_box_request = self._session.get("https://wodbuster.com/account/roadtobox.aspx",
                                                     headers=_HEADERS, allow_redirects=False, timeout=10)
-            if "Location" not in road_to_box_request.headers:
-                raise InvalidWodBusterResponse("Reponse from WodBuster roadtobox without a Location header")
-            elif "login" not in road_to_box_request.headers["Location"]:
-                self.logged = True
-            else:
+
+            if "Location" in road_to_box_request.headers and "login" in road_to_box_request.headers["Location"]:
                 self._login_with_username_and_password()
+            else:
+                self.logged = True
         else:
             self._login_with_username_and_password()
 
@@ -168,6 +167,11 @@ class Scraper():
 
         for _class in classes['Data']:
             if _class['Hora'] == hour:
+                class_status = _class['Valores'][0]['TipoEstado']
+
+                if class_status == "Borrable":
+                    return True
+
                 class_details = _class['Valores'][0]['Valor']
                 _id = class_details['Id']
                 if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
