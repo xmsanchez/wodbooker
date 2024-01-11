@@ -154,6 +154,9 @@ class BookingAdmin(sqla.ModelView):
         query = query.filter_by(user_id=login.current_user.id)
         return query
 
+    def get_count_query(self):
+        return super().get_count_query().filter_by(user_id=login.current_user.id)
+
     def get_one(self, id):
         result = super().get_one(id)
         if result.user_id != login.current_user.id:
@@ -231,6 +234,9 @@ class EventView(sqla.ModelView):
         query = super().get_query()
         query = query.join(Booking).filter(Booking.user_id==login.current_user.id)
         return query
+
+    def get_count_query(self):
+        return super().get_count_query().filter_by(user_id=login.current_user.id)
 
     def get_one(self, id):
         result = super().get_one(id)
