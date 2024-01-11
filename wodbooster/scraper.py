@@ -17,6 +17,7 @@ _HEADERS = {
 _UTC_TZ = pytz.timezone('UTC')
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 _WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE = "WodBuster is not accepting more requests at this time. Try again in a minute"
+_MORE_THAN_ONE_BOX_MESSAGE = "User can access more than to boxes"
 
 
 class Scraper():
@@ -294,6 +295,26 @@ class Scraper():
         command_str = json.dumps(command) + "\u001e"
         self._session.post(f"{sse_server}/bookinghub?id={connection_token}",
                            data=command_str, headers=headers, timeout=10)
+
+    def get_box_url(self) -> str:
+        """
+        Get the WodBuster URL associated with the user.
+        Box URL is only returned when the user has just one box associated.
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the user has more than one box associated
+        :return: The WodBuster URL associated with the user
+        """
+        self.login()
+        road_to_box_request = self._session.get("https://wodbuster.com/account/roadtobox.aspx",
+                                                headers=_HEADERS, allow_redirects=False, timeout=10)
+        if "Location" in road_to_box_request.headers:
+            if "login" in road_to_box_request.headers["Location"]:
+                raise LoginError("Invalid credentials")
+            else:
+                full_url = road_to_box_request.headers["Location"]
+                return full_url[:full_url.index("/user")]
+        else:
+            raise InvalidWodBusterResponse(_MORE_THAN_ONE_BOX_MESSAGE)
 
 
 __SCRAPERS = {}
