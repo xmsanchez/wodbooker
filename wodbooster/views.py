@@ -236,7 +236,7 @@ class EventView(sqla.ModelView):
         return query
 
     def get_count_query(self):
-        return super().get_count_query().filter_by(user_id=login.current_user.id)
+        return super().get_count_query().filter(Booking.user_id==login.current_user.id)
 
     def get_one(self, id):
         result = super().get_one(id)
