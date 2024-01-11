@@ -177,7 +177,8 @@ class Scraper():
                 if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
                     raise ClassIsFull("Class is full")
 
-                book_result = self._book_request(f'{url}/athlete/handlers/Calendario_Inscribir.ashx?id={_id}&ticks={epoch}')
+                api_path = "Calendario_Mover.ashx" if class_status == "Cambiable" else "Calendario_Inscribir.ashx"
+                book_result = self._book_request(f'{url}/athlete/handlers/{api_path}?id={_id}&ticks={epoch}')
                 return book_result['Res']['EsCorrecto']
 
         return False
