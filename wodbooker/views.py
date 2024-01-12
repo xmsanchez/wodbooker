@@ -209,8 +209,8 @@ class BookingAdmin(sqla.ModelView):
                 try:
                     scraper = get_scraper(login.current_user.email, login.current_user.cookie)
                     form.url.data = form.url.data or scraper.get_box_url()
-                except (LoginError, InvalidWodBusterResponse, RequestException):
-                    pass
+                except (LoginError, InvalidWodBusterResponse, RequestException) as e:
+                    logging.warning("Exception while loading BOX URL %s", e)
 
         return form
 

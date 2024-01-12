@@ -72,7 +72,7 @@ def index():
 init_login()
 
 # Create admin
-admin = Admin(app, name='WodBooster', index_view=MyAdminIndexView(),
+admin = Admin(app, name='WodBooker', index_view=MyAdminIndexView(),
               base_template='base.html', template_mode='bootstrap4')
 
 # Add views
@@ -90,6 +90,7 @@ def cleaning_loop(app_context):
     app_context.push()
     with app_context:
         while True:
+            logging.info("Cleaning events older than 15 days")
             db.session.query(Event).filter(Event.date < datetime.now() - timedelta(days=15)).delete()
             db.session.commit()
             time.sleep(60 * 60 * 24)

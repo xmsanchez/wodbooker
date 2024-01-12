@@ -179,6 +179,7 @@ class Scraper():
                     raise ClassIsFull("Class is full")
 
                 api_path = "Calendario_Mover.ashx" if class_status == "Cambiable" else "Calendario_Inscribir.ashx"
+                logging.info("Using API path %s to join user to class", api_path)
                 book_result = self._book_request(f'{url}/athlete/handlers/{api_path}?id={_id}&ticks={epoch}')
                 return book_result['Res']['EsCorrecto']
 

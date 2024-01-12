@@ -1,4 +1,4 @@
-# Wodbuster AutoBooker
+# WodBooker - The WodBuster AutoBooker
 
 This Flask application allows WodBuster users to create booking requests which will be performed on their behalf as soon as possible.
 
