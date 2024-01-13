@@ -87,7 +87,7 @@ class MyAdminIndexView(AdminIndexView):
         form = LoginForm(request.form)
         if helpers.validate_form_on_submit(form):
             user = form.get_user()
-            login.login_user(user)
+            login.login_user(user, remember=True)
 
         if login.current_user.is_authenticated:
             return redirect(url_for('booking.index_view'))
