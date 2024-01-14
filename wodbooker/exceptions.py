@@ -6,15 +6,9 @@ class LoginError(Exception):
     """
 
 
-class InvalidWodBusterAPIResponse(Exception):
+class InvalidWodBusterResponse(Exception):
     """
     Raises when WodBuster returns a non expected response
-    """
-
-
-class NotLoggedUser(Exception):
-    """
-    Raises when an action is performed that requires to be logged
     """
 
 
@@ -26,3 +20,18 @@ class BookingNotAvailable(Exception):
     def __init__(self, message, available_at: datetime) -> None:
         super().__init__(message)
         self.available_at = available_at
+
+class ClassIsFull(Exception):
+    """
+    Raises when a class is full
+    """
+
+class PasswordRequired(Exception):
+    """
+    Raises when a password is required
+    """
+
+class InvalidBox(Exception):
+    """
+    Raises when the provided box is invalid
+    """

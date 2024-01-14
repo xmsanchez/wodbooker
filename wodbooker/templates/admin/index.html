@@ -1,10 +1,18 @@
 {% extends 'admin/master.html' %}
+{% block scripts %}
+  <script src='https://www.google.com/recaptcha/api.js' async defer></script>
+{% endblock %}
 {% block body %}
 {{ super() }}
+{% if not current_user.is_authenticated %}
+<div class="alert alert-info" role="alert">
+  Utiliza tus credenciales de WodBuster para acceder
+</div>
+{% endif %}
 <div class="container">
-  <div class="row">
+  <div class="row justify-content-center">
     {% if not current_user.is_authenticated %}
-      <div class="col-md-4 offset-md-3">
+      <div class="col-md-4">
         <form method="POST" action="" class="form mt-3">
           {{ form.hidden_tag() if form.hidden_tag }}
           {% for f in form if f.type != 'CSRFTokenField' %}
@@ -22,7 +30,6 @@
           {% endfor %}
           <button class="btn btn-success" type="submit">Submit</button>
         </form>
-        {{ link | safe }}
       </div>
     {% endif %}
   </div>

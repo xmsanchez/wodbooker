@@ -1,21 +1,39 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 db = SQLAlchemy()
 
 
 class Booking(db.Model):
+
+    STATUS_SEPARATOR = '\n'
+
     id = db.Column(db.Integer, primary_key=True)
     dow = db.Column(db.Integer)
     time = db.Column(db.Time)
     booked_at = db.Column(db.DateTime)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User')
-    available_at = db.Column(db.DateTime)
     last_book_date = db.Column(db.Date)
+    url = db.Column(db.String(128))
+    available_at = db.Column(db.Time)
+    offset = db.Column(db.Integer)
+    events = db.relationship('Event', backref='booking', lazy=True, cascade="all, delete-orphan")
+    is_active = db.Column(db.Boolean, default=True)
+
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    booking_id = db.Column(db.Integer, db.ForeignKey('booking.id'))
+    date = db.Column(db.DateTime, default=datetime.now)
+    event = db.Column(db.String(256))
+
+    def __str__(self):
+        return f"{self.date.strftime('%d/%m/%Y %H:%M')}: {self.event}"
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    password = db.Column(db.String(100))
     email = db.Column(db.String(120), unique=True)
     cookie = db.Column(db.String(1024))
 
