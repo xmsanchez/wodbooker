@@ -6,8 +6,6 @@ db = SQLAlchemy()
 
 class Booking(db.Model):
 
-    STATUS_SEPARATOR = '\n'
-
     id = db.Column(db.Integer, primary_key=True)
     dow = db.Column(db.Integer)
     time = db.Column(db.Time)
