@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from flask import redirect, url_for, request, flash
 from markupsafe import Markup
 from wtforms import form, fields, validators
@@ -87,7 +88,7 @@ class MyAdminIndexView(AdminIndexView):
         form = LoginForm(request.form)
         if helpers.validate_form_on_submit(form):
             user = form.get_user()
-            login.login_user(user, remember=True)
+            login.login_user(user, remember=True, duration=timedelta(days=15))
 
         if login.current_user.is_authenticated:
             return redirect(url_for('booking.index_view'))
