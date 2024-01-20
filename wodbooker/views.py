@@ -123,31 +123,19 @@ class BookingForm(form.Form):
             raise validators.ValidationError("Ya existe una reserva para ese día de la semana, hora y box")
 
 
-def _parse_events(v, c, m, p):
-    events = m.events
-    events = [x for i, x in enumerate(events) if i == 0 or x.event != events[i-1].event]
-    events = events[-3:]
-    if events:
-        parsed_events = [f"<li>{x.date.strftime('%d/%m/%Y %H:%M')}: {x.event}</li>" for x in events]
-        parsed_events = "<ul>" + "".join(parsed_events) + "</ul>"
-        parsed_events = Markup(parsed_events + f'<a class="float-right" href="/admin/event/?search={m.id}"><i>Ver todos ≫</i></a>')
-    else:
-        parsed_events = Markup(f"<i>{_NO_EVENTS}</i>")
-    
-    return parsed_events
-
-
 class BookingAdmin(sqla.ModelView):
     form = BookingForm
 
-    column_labels = dict(dow='Día de la semana', time='Hora', events='Últimos eventos',
-                         url='Box', is_active='Activo')
-    column_list = ('dow', 'time', 'is_active', 'url', 'events')
+    list_template = 'admin/booking/list.html'
+    edit_template = 'admin/booking/edit.html'
+    create_template = 'admin/booking/create.html'
 
     column_formatters = dict(
         dow=lambda v, c, m, p: _DAYS_OF_WEEK[m.dow],
-        url=lambda v, c, m, p: Markup(f'<a href="{m.url}">{m.url.split("/")[2].split(".")[0]}</a>'),
-        events=_parse_events,
+        time=lambda v, c, m, p: m.time.strftime('%H:%M'),
+        available_at=lambda v, c, m, p: m.available_at.strftime('%H:%M'),
+        last_book_date=lambda v, c, m, p: m.last_book_date.strftime('%d/%m/%Y') if m.last_book_date else "",
+        offset=lambda v, c, m, p: _DAYS_OF_WEEK[m.dow - m.offset],
     )
 
     def get_query(self):

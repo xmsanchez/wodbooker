@@ -1,0 +1,72 @@
+{% extends 'admin/model/list.html' %}
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}
+{% block model_menu_bar %}
+  <div>
+    <p class="text-right"><a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a></p>
+  </div>
+{% endblock %}
+{% block model_list_table %}
+  {% if not data %}
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-square"></i> Aún no tienes reservas creadas. Crea tu primera reserva <a href="{{ get_url('.create_view', url=return_url, modal=True) }}">aquí</a>.
+    </div>
+  {% else %}
+    <div class="accordion" id="bookingsAccordion">
+      {% for row in data %}
+        <div class="card">
+          <div class="card-header" id="heading{{row['id']}}">
+            <h2 class="mb-0">
+              <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}">
+                  {{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}
+              </button>
+            </h2>
+          </div>
+    
+          <div id="collapse{{row['id']}}" class="collapse" aria-labelledby="heading{{row['id']}}" data-parent="#bookingsAccordion">
+            <div class="card-body">
+              <div class="container-fluid">
+                <p>
+                  <b>Box</b><br/>
+                  <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ get_value(row, 'url') }}" target="_blank">{{ get_value(row, 'url') }}</a> 
+                </p>
+                <p>
+                  <b>Activo</b><br/>
+                  {{ "Sí" if row["is_active"] else "No" }}
+                </p>
+                <p>
+                  <b>Apertura de reservas</b><br/>
+                  {{ get_value(row, 'offset') }} a las {{ get_value(row, 'available_at') }}
+                </p>  
+                <p>
+                  <b>Última reserva realizada</b><br/>
+                  {% if row['last_book_date'] %}
+                    {{ get_value(row, 'last_book_date') }}
+                  {% else %}
+                    <i>Ninguna</i>
+                  {% endif %}
+                </p>  
+                <p>
+                  <b>Último evento</b><br/>
+                  {% if row['events'] %}
+                    {{ row['events'][-1]['date'].strftime('%d/%m/%Y %H:%M') }}: {{ row['events'][-1]['event'] }}<br>
+                    <a href="/admin/event/?search={{row['id']}}">Ver todos <i class="bi bi-arrow-up-right"></i></a>
+                  {% else %}
+                    <i>Ninguno</i>
+                  {% endif %}
+                </p>
+                <div>
+                  {% for action in list_row_actions %}
+                    {{ action.render_ctx(get_pk_value(row), row) }}
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+    {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
