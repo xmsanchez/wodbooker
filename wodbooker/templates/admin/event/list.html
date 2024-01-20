@@ -1,0 +1,32 @@
+{% extends 'admin/model/list.html' %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}
+
+{% block model_menu_bar %}
+  {% if search_supported %}
+    {{ model_layout.search_form() }}
+  {% endif %}
+{% endblock %}
+
+{% block model_list_table %}
+  {% for row in data %}
+    <p>
+      <b>{{ "Reserva del " + get_value(row, 'booking') + " - " if not search else "" }}{{ get_value(row, 'date') }}:</b><br/>
+      {{ get_value(row, 'event') }}
+    </p>
+  {% else %}
+    <div class="alert alert-info container" style="margin-top: 10px;" role="alert">
+      <i class="bi bi-info-square"></i> Tus reservas no han generado eventos aún.
+    </div>
+  {% endfor %}
+
+  {% if num_pages is not none %}
+    {{ lib.pager(page, num_pages, pager_url) }}
+  {% else %}
+    {{ lib.simple_pager(page, data|length == page_size, pager_url) }}
+  {% endif %}
+
+{% endblock %}

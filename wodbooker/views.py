@@ -205,14 +205,14 @@ class BookingAdmin(sqla.ModelView):
 
 
 class EventView(sqla.ModelView):
-    column_list = ('booking', 'date', 'event')
     column_labels = dict(booking='Reserva', date='Fecha y Hora', event='Mensaje')
     can_create = False
     can_delete = False
     can_edit = False
-    
 
     column_searchable_list = ('booking_id',)
+
+    list_template = 'admin/event/list.html'
 
     column_formatters = dict(
         booking=lambda v, c, m, p: _DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M'),
