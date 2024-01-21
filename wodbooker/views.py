@@ -111,7 +111,6 @@ class BookingForm(form.Form):
     url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)')
     offset = fields.IntegerField('Días de antelación para reservar')
     available_at = TimeField('Hora de apertura de reservas')
-    is_active = fields.BooleanField('Activo', default=True)
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(
@@ -241,6 +240,9 @@ class EventView(sqla.ModelView):
         booking=lambda v, c, m, p: _DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M'),
         date=lambda v, c, m, p: m.date.strftime('%d/%m/%Y %H:%M'),
     )
+
+    def is_visible(self):
+        return False
 
     def get_query(self):
         query = super().get_query()
