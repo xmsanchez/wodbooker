@@ -29,6 +29,7 @@ _CREDENTIALS_EXPIRED = "Tus credenciales están caducadas. Vuelve a logarte y ac
 _LOGIN_FAILED = "Login fallido: credenciales inválidas. Vuelve a logarte y vuelve a intentarlo"
 _INVALID_BOX_URL = "La URL del box introducida no es válida o no tienes acceso al mismo. Actualiza la URL y vuelve a intentarlo"
 _TOO_MANY_ERRORS = "Se han producido demasiados errores al intentar reservar. Proceso abortado"
+_PAUSED = "Pausado"
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
     """ 
@@ -296,3 +297,7 @@ def stop_booking_loop(booking: Booking) -> None:
         booker = __CURRENT_THREADS[booking.id]
         booker.stop(_StopThreadException)
         del __CURRENT_THREADS[booking.id]
+
+        event = Event(booking_id=booking.id, event=_PAUSED)
+        _add_event(event)
+        db.session.commit()
