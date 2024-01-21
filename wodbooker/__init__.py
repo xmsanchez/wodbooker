@@ -83,7 +83,8 @@ admin.add_view(EventView(Event, db.session, 'Eventos'))
 with app.app_context():
     bookings = db.session.query(Booking).all()
     for booking in bookings:
-        start_booking_loop(booking)
+        if booking.is_active:
+            start_booking_loop(booking)
 
 # Start events cleaning loop
 def cleaning_loop(app_context):

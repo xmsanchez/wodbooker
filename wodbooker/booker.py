@@ -98,7 +98,7 @@ class Booker(StoppableThread):
                         logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M'))
                         event = Event(booking_id=self._booking.id,
                                       event=_CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
-                        db.session.add(event)
+                        _add_event(event)
                         waiter = None
                     datetime_to_book = _datetime_to_book
                     day_to_book = datetime_to_book.date()
@@ -119,13 +119,13 @@ class Booker(StoppableThread):
                     if scraper.book(self._booking.url, datetime_to_book):
                         logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
                         event = Event(booking_id=self._booking.id, event=_BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
-                        db.session.add(event)
+                        _add_event(event)
                         errors = 0
                     else:
                         logging.warning("Impossible to book classes for %s for %s. Class is already booked or user cannot book. Igoning week and attempting booking for next week",
                                         self._booking.user.email, datetime_to_book)
                         event = Event(booking_id=self._booking.id, event=_UNKNOWN_BOOKING_ERROR)
-                        db.session.add(event)
+                        _add_event(event)
                         errors = 0
 
                     self._booking.last_book_date = day_to_book
@@ -151,31 +151,31 @@ class Booker(StoppableThread):
                     sleep_for = (errors + 1) * 60
                     logging.warning("Request Exception: %s", e)
                     event = Event(booking_id=self._booking.id, event=_UNEXPECTED_NETWORK_ERROR % sleep_for)
-                    db.session.add(event)
+                    _add_event(event)
                     errors += 1
                     pause.seconds(sleep_for)
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Invalid WodBuster response: %s", e)
                     event = Event(booking_id=self._booking.id, event=_UNEXPECTED_WODBUSTER_RESPONSE % sleep_for)
-                    db.session.add(event)
+                    _add_event(event)
                     errors += 1
                     pause.seconds(sleep_for)
                 except PasswordRequired:
                     force_exit = True
                     logging.warning("Credentials for user %s are outdated. Aborting...", self._booking.user.email)
                     event = Event(booking_id=self._booking.id, event=_CREDENTIALS_EXPIRED)
-                    db.session.add(event)
+                    _add_event(event)
                 except LoginError:
                     force_exit = True
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
                     event = Event(booking_id=self._booking.id, event=_LOGIN_FAILED)
-                    db.session.add(event)
+                    _add_event(event)
                 except InvalidBox:
                     force_exit = True
                     logging.warning("User %s accessing to an invalid box detected. Aborting...", self._booking.user.email)
                     event = Event(booking_id=self._booking.id, event=_INVALID_BOX_URL)
-                    db.session.add(event)
+                    _add_event(event)
                 finally:
                     db.session.commit()
 
@@ -227,7 +227,7 @@ class _TimeWaiter(_Waiter):
         if self._wait_datetime > datetime.now(_MADRID_TZ):
             logging.info("Waiting until %s", self._wait_datetime.strftime('%d/%m/%Y %H:%M'))
             event = Event(booking_id=self.booking.id, event=self.log_message)
-            db.session.add(event)
+            _add_event(event)
             db.session.commit()
             pause.until(self._wait_datetime)
 
@@ -258,11 +258,20 @@ class _EventWaiter(_Waiter):
         Wait until the event occurs
         """
         event = Event(booking_id=self.booking.id, event=self.log_message)
-        db.session.add(event)
+        _add_event(event)
         db.session.commit()
         self._scraper.wait_until_event(self._url, self._event_date, self._expected_events,
                                        self._max_datetime)
 
+
+def _add_event(event: Event) -> None:
+    """
+    Add the evnet to the session only when the last event is different
+    :param event: The event to add
+    """
+    last_event = db.session.query(Event).filter_by(booking_id=event.booking_id).order_by(Event.id.desc()).first()
+    if not last_event or last_event.event != event.event:
+        db.session.add(event)
 
 def start_booking_loop(booking: Booking) -> None:
     """ 
