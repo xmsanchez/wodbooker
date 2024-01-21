@@ -36,3 +36,21 @@
   </button>
 </form>
 {% endmacro %}
+
+{% macro swtich_active(action, row_id, row) %}
+<form class="justify-content-center align-self-center" style="margin-right: 5px;" method="POST" action="{{ get_url('.switch_active') }}">
+  {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  {% endif %}
+  <input type="hidden" name="row_id" value="{{ get_pk_value(row) }}"/>
+  {% if row["is_active"] %}
+    <button title="{{ _gettext('Deactivate record') }}" class="btn btn-success">
+      <i class="bi bi bi-toggle-on"></i>
+    </button>
+  {% else %}
+    <button title="{{ _gettext('Activate record') }}" class="btn btn-secondary">
+      <i class="bi bi bi-toggle-off"></i>
+    </button>
+  {% endif %}
+</form>
+{% endmacro %}

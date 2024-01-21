@@ -8,6 +8,7 @@ import flask_login as login
 from flask_admin import AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
 from flask_admin.form import SecureForm
+from flask_admin.model.template import TemplateLinkRowAction
 from requests.exceptions import RequestException
 from sqlalchemy import and_
 from flask_wtf import FlaskForm
@@ -137,6 +138,28 @@ class BookingAdmin(sqla.ModelView):
         last_book_date=lambda v, c, m, p: m.last_book_date.strftime('%d/%m/%Y') if m.last_book_date else "",
         offset=lambda v, c, m, p: _DAYS_OF_WEEK[m.dow - m.offset],
     )
+
+    column_extra_row_actions = [  # Add a new action button
+        TemplateLinkRowAction("row_actions.swtich_active", "Swtich Active"),
+    ]
+
+    @expose("/active", methods=("POST",))
+    def switch_active(self):
+        """
+        Switch active status of a booking
+        """
+        row_id = request.form.get("row_id")
+        if row_id is not None:
+            model = self.get_one(row_id)
+            if model is not None:
+                model.is_active = not model.is_active
+                db.session.commit()
+                if model.is_active:
+                    start_booking_loop(model)
+                else:
+                    stop_booking_loop(model)
+        
+        return redirect(url_for('booking.index_view'))
 
     def get_query(self):
         query = super().get_query()

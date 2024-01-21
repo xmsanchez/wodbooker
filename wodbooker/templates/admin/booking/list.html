@@ -23,9 +23,9 @@
                   <h4 style="margin-bottom: 0px;">{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}</h4>
               </button>
             </h2>
-            {% for action in list_row_actions %}
-              {{ action.render_ctx(get_pk_value(row), row) }}
-            {% endfor %}
+            {{ list_row_actions[2].render_ctx(get_pk_value(row), row) }}
+            {{ list_row_actions[0].render_ctx(get_pk_value(row), row) }}
+            {{ list_row_actions[1].render_ctx(get_pk_value(row), row) }}
           </div>
     
           <div id="collapse{{row['id']}}" class="collapse" aria-labelledby="heading{{row['id']}}" data-parent="#bookingsAccordion">
