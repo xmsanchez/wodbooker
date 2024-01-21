@@ -17,12 +17,15 @@
     <div class="accordion" id="bookingsAccordion">
       {% for row in data %}
         <div class="card">
-          <div class="card-header" id="heading{{row['id']}}">
-            <h2 class="mb-0">
+          <div class="card-header d-flex justify-content-between" id="heading{{row['id']}}">
+            <h2 class="mb-0 mr-auto">
               <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}">
-                  <h3>{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}</h3>
+                  <h4 style="margin-bottom: 0px;">{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}</h4>
               </button>
             </h2>
+            {% for action in list_row_actions %}
+              {{ action.render_ctx(get_pk_value(row), row) }}
+            {% endfor %}
           </div>
     
           <div id="collapse{{row['id']}}" class="collapse" aria-labelledby="heading{{row['id']}}" data-parent="#bookingsAccordion">
@@ -57,11 +60,6 @@
                     <i>Ninguno</i>
                   {% endif %}
                 </p>
-                <div>
-                  {% for action in list_row_actions %}
-                    {{ action.render_ctx(get_pk_value(row), row) }}
-                  {% endfor %}
-                </div>
               </div>
             </div>
           </div>
