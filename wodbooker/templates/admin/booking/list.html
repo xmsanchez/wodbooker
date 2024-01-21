@@ -52,7 +52,7 @@
                   {% endif %}
                 </p>  
                 <p>
-                  <b>Último evento</b><br/>
+                  <b>Estado</b><br/>
                   {% if row['events'] %}
                     {{ row['events'][-1]['date'].strftime('%d/%m/%Y %H:%M') }}: {{ row['events'][-1]['event'] }}<br>
                     <a href="/admin/event/?search=%3D{{row['id']}}">Ver todos <i class="bi bi-arrow-up-right"></i></a>
