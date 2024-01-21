@@ -6,20 +6,22 @@
 {% endblock %}
 
 {% block model_menu_bar %}
+  <h3><a href="javascript:history.back()"><i class="bi bi-arrow-left-square-fill"></i></a> Eventos reserva {{ search.replace("=", "") }}</h3>
 {% endblock %}
 
 {% block model_list_table %}
-  {% for row in data %}
-    <p>
-      <b>{{ "Reserva del " + get_value(row, 'booking') + " - " if not search else "" }}{{ get_value(row, 'date') }}:</b><br/>
-      {{ get_value(row, 'event') }}
-    </p>
-  {% else %}
-    <div class="alert alert-info container" style="margin-top: 10px;" role="alert">
-      <i class="bi bi-info-square"></i> Tus reservas no han generado eventos aún.
-    </div>
-  {% endfor %}
-
+  <div style="margin-top: 25px;">
+    {% for row in data %}
+      <p>
+        <b>{{ "Reserva del " + get_value(row, 'booking') + " - " if not search else "" }}{{ get_value(row, 'date') }}:</b><br/>
+        {{ get_value(row, 'event') }}
+      </p>
+    {% else %}
+      <div class="alert alert-info container" style="margin-top: 10px;" role="alert">
+        <i class="bi bi-info-square"></i> Tus reservas no han generado eventos aún.
+      </div>
+    {% endfor %}
+  </div>
   {% if num_pages is not none %}
     {{ lib.pager(page, num_pages, pager_url) }}
   {% else %}
