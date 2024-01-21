@@ -15,7 +15,7 @@
 {% endmacro %}
 
 {% macro edit_row(action, row_id, row) %}
-  <a class="btn btn-primary btn btn-primary justify-content-center align-self-center" style="margin-right: 5px;" href="{{ get_url('.edit_view', id=row_id, url=return_url) }}" role="button"><i class="bi bi-pencil-fill"></i></a>
+  <a class="btn btn-primary btn btn-primary justify-content-center align-self-center btn-sm" style="margin-right: 5px;" href="{{ get_url('.edit_view', id=row_id, url=return_url) }}" role="button"><i class="bi bi-pencil-fill"></i></a>
 {% endmacro %}
 
 {% macro edit_row_popup(action, row_id, row) %}
@@ -31,7 +31,7 @@
   {% elif csrf_token %}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
   {% endif %}
-  <button onclick="return faHelpers.safeConfirm('¿Estás seguro de que quieres borrar esta reserva?');" title="{{ _gettext('Delete record') }}" class="btn btn-danger">
+  <button onclick="return faHelpers.safeConfirm('¿Estás seguro de que quieres borrar esta reserva?');" title="{{ _gettext('Delete record') }}" class="btn btn-danger btn-sm">
     <i class="bi bi-trash-fill"></i>
   </button>
 </form>
@@ -44,11 +44,11 @@
   {% endif %}
   <input type="hidden" name="row_id" value="{{ get_pk_value(row) }}"/>
   {% if row["is_active"] %}
-    <button title="{{ _gettext('Deactivate record') }}" class="btn btn-success">
+    <button title="{{ _gettext('Deactivate record') }}" class="btn btn-success btn-sm">
       <i class="bi bi bi-toggle-on"></i>
     </button>
   {% else %}
-    <button title="{{ _gettext('Activate record') }}" class="btn btn-secondary">
+    <button title="{{ _gettext('Activate record') }}" class="btn btn-secondary btn-sm">
       <i class="bi bi bi-toggle-off"></i>
     </button>
   {% endif %}
