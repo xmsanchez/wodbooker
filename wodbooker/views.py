@@ -155,8 +155,10 @@ class BookingAdmin(sqla.ModelView):
                 db.session.commit()
                 if model.is_active:
                     start_booking_loop(model)
+                    flash("Reserva activada con éxito", "success")
                 else:
                     stop_booking_loop(model)
+                    flash("Reserva desactivada con éxito", "success")
         
         return redirect(url_for('booking.index_view'))
 
