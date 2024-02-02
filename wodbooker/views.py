@@ -107,10 +107,10 @@ class BookingForm(form.Form):
     dow = fields.SelectField('Día de la semana', choices=[(0, 'Lunes'), (1, 'Martes'), (
         2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')])
 
-    time = TimeField('Hora')
-    url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)')
-    offset = fields.IntegerField('Días de antelación para reservar')
-    available_at = TimeField('Hora de apertura de reservas')
+    time = TimeField('Hora', validators=[validators.DataRequired()])
+    url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)', validators=[validators.DataRequired()])
+    offset = fields.IntegerField('Días de antelación para reservar', validators=[validators.DataRequired()])
+    available_at = TimeField('Hora de apertura de reservas', validators=[validators.DataRequired()])
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(

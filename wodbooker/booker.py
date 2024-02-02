@@ -154,6 +154,7 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=_UNEXPECTED_NETWORK_ERROR % sleep_for)
                     _add_event(event)
                     errors += 1
+                    db.session.commit()
                     pause.seconds(sleep_for)
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
@@ -161,6 +162,7 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=_UNEXPECTED_WODBUSTER_RESPONSE % sleep_for)
                     _add_event(event)
                     errors += 1
+                    db.session.commit()
                     pause.seconds(sleep_for)
                 except PasswordRequired:
                     force_exit = True
