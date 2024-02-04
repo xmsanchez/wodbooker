@@ -303,3 +303,11 @@ def stop_booking_loop(booking: Booking) -> None:
         event = Event(booking_id=booking.id, event=_PAUSED)
         _add_event(event)
         db.session.commit()
+
+def is_booking_running(booking: Booking) -> bool:
+    """
+    Check if a booking is running
+    :param booking: The booking to check
+    :return: True if the booking is running, False otherwise
+    """
+    return booking.id in __CURRENT_THREADS and __CURRENT_THREADS[booking.id].is_alive()

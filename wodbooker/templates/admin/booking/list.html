@@ -20,7 +20,11 @@
           <div class="card-header d-flex justify-content-between" id="heading{{row['id']}}">
             <h2 class="mb-0 mr-auto">
               <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}">
-                  <h4 style="margin-bottom: 0px;">{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}</h4>
+                  <h4 style="margin-bottom: 0px;">{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}
+                    {% if row["is_active"] and not row['is_thread_active'] %}
+                      <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
+                    {% endif %}
+                  </h4>
               </button>
             </h2>
             {{ list_row_actions[2].render_ctx(get_pk_value(row), row) }}

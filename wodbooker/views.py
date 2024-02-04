@@ -15,7 +15,7 @@ from flask_wtf import FlaskForm
 from flask_wtf import Recaptcha
 from flask_wtf.recaptcha import RecaptchaField
 from .models import User, db, Booking
-from .booker import start_booking_loop, stop_booking_loop
+from .booker import start_booking_loop, stop_booking_loop, is_booking_running
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse
 
@@ -161,6 +161,12 @@ class BookingAdmin(sqla.ModelView):
                     flash("Reserva desactivada con éxito", "success")
         
         return redirect(url_for('booking.index_view'))
+
+    def get_list(self, *args, **kwargs):
+        count, data = super().get_list(*args, **kwargs)
+        for obj in data:
+            obj.is_thread_active = is_booking_running(obj)
+        return count, data
 
     def get_query(self):
         query = super().get_query()
