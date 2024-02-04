@@ -14,6 +14,8 @@ from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
+_MAX_ERRORS = 5
+
 __CURRENT_THREADS = {
 }
 
@@ -28,7 +30,7 @@ _UNEXPECTED_WODBUSTER_RESPONSE = "Respuesta inesperada de WodBuster. Esperando %
 _CREDENTIALS_EXPIRED = "Tus credenciales están caducadas. Vuelve a logarte y actualiza esta entrada para reactivar las reservas"
 _LOGIN_FAILED = "Login fallido: credenciales inválidas. Vuelve a logarte y vuelve a intentarlo"
 _INVALID_BOX_URL = "La URL del box introducida no es válida o no tienes acceso al mismo. Actualiza la URL y vuelve a intentarlo"
-_TOO_MANY_ERRORS = "Se han producido demasiados errores al intentar reservar. Proceso abortado"
+_TOO_MANY_ERRORS = "Se han producido demasiados errores al intentar reservar. Reserva parada"
 _PAUSED = "Pausado"
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
@@ -89,7 +91,7 @@ class Booker(StoppableThread):
             force_exit = False
             waiter = None
             datetime_to_book = None
-            while errors < 5 and not force_exit:
+            while errors < _MAX_ERRORS and not force_exit:
                 try:
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
@@ -151,19 +153,15 @@ class Booker(StoppableThread):
                 except RequestException as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Request Exception: %s", e)
-                    event = Event(booking_id=self._booking.id, event=_UNEXPECTED_NETWORK_ERROR % sleep_for)
-                    _add_event(event)
+                    waiter = _TimeWaiter(self._booking, _UNEXPECTED_NETWORK_ERROR % sleep_for,
+                                            datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     errors += 1
-                    db.session.commit()
-                    pause.seconds(sleep_for)
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Invalid WodBuster response: %s", e)
-                    event = Event(booking_id=self._booking.id, event=_UNEXPECTED_WODBUSTER_RESPONSE % sleep_for)
-                    _add_event(event)
+                    waiter = _TimeWaiter(self._booking, _UNEXPECTED_WODBUSTER_RESPONSE % sleep_for,
+                                         datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     errors += 1
-                    db.session.commit()
-                    pause.seconds(sleep_for)
                 except PasswordRequired:
                     force_exit = True
                     logging.warning("Credentials for user %s are outdated. Aborting...", self._booking.user.email)
@@ -182,10 +180,12 @@ class Booker(StoppableThread):
                 finally:
                     db.session.commit()
 
-            if errors >= 5:
+            if errors >= _MAX_ERRORS:
                 logging.error("Exiting thread as maximum number of retries has been reached. Review logs for more information")
-                self._set_booking_status(_TOO_MANY_ERRORS)
-                self._session.commit()
+                event = Event(booking_id=self._booking.id, event=_TOO_MANY_ERRORS)
+                _add_event(event)
+                db.session.commit()
+            logging.info("Exiting thread...")
         except _StopThreadException:
             logging.info("Thread %s has been stopped", self._name)
         except Exception:
@@ -228,7 +228,7 @@ class _TimeWaiter(_Waiter):
         Wait until the provided date is reached
         """
         if self._wait_datetime > datetime.now(_MADRID_TZ):
-            logging.info("Waiting until %s", self._wait_datetime.strftime('%d/%m/%Y %H:%M'))
+            logging.info("Waiting until %s", self._wait_datetime.strftime('%d/%m/%Y %H:%M:%S'))
             event = Event(booking_id=self.booking.id, event=self.log_message)
             _add_event(event)
             db.session.commit()
