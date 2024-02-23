@@ -5,11 +5,9 @@ import threading
 import os.path as op
 import logging
 from flask import Flask, redirect, request, session
-from flask_sqlalchemy import SQLAlchemy
 
 from flask_admin import Admin
 import flask_login as login
-from flask_admin.contrib import sqla
 from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView

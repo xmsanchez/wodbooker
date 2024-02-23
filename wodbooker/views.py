@@ -1,13 +1,11 @@
 import logging
 from datetime import timedelta
 from flask import redirect, url_for, request, flash
-from markupsafe import Markup
 from wtforms import form, fields, validators
 from flask_admin.form.fields import TimeField
 import flask_login as login
 from flask_admin import AdminIndexView, helpers, expose
 from flask_admin.contrib import sqla
-from flask_admin.form import SecureForm
 from flask_admin.model.template import TemplateLinkRowAction
 from requests.exceptions import RequestException
 from sqlalchemy import and_
@@ -89,7 +87,7 @@ class MyAdminIndexView(AdminIndexView):
         form = LoginForm(request.form)
         if helpers.validate_form_on_submit(form):
             user = form.get_user()
-            login.login_user(user, remember=True, duration=timedelta(days=15))
+            login.login_user(user, remember=True, duration=timedelta(days=14))
 
         if login.current_user.is_authenticated:
             return redirect(url_for('booking.index_view'))
