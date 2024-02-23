@@ -289,10 +289,11 @@ def start_booking_loop(booking: Booking) -> None:
     __CURRENT_THREADS[booking.id] = booker
     booker.start()
 
-def stop_booking_loop(booking: Booking) -> None:
+def stop_booking_loop(booking: Booking, log_pause: bool=False) -> None:
     """ 
     Stop the booking loop for a given booking 
     :param booking: The booking to stop
+    :param log_pause: If True, a pause event is logged
     """
     logging.info("Stopping thread for booking %s", booking)
     if booking.id in __CURRENT_THREADS:
@@ -300,9 +301,10 @@ def stop_booking_loop(booking: Booking) -> None:
         booker.stop(_StopThreadException)
         del __CURRENT_THREADS[booking.id]
 
-        event = Event(booking_id=booking.id, event=_PAUSED)
-        _add_event(event)
-        db.session.commit()
+        if log_pause:
+            event = Event(booking_id=booking.id, event=_PAUSED)
+            _add_event(event)
+            db.session.commit()
 
 def is_booking_running(booking: Booking) -> bool:
     """

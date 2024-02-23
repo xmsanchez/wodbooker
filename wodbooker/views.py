@@ -17,7 +17,7 @@ from flask_wtf.recaptcha import RecaptchaField
 from .models import User, db, Booking
 from .booker import start_booking_loop, stop_booking_loop, is_booking_running
 from .scraper import refresh_scraper, get_scraper
-from .exceptions import LoginError, InvalidWodBusterResponse
+from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
 
 _DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 _NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí " + \
@@ -157,7 +157,7 @@ class BookingAdmin(sqla.ModelView):
                     start_booking_loop(model)
                     flash("Reserva activada con éxito", "success")
                 else:
-                    stop_booking_loop(model)
+                    stop_booking_loop(model, True)
                     flash("Reserva desactivada con éxito", "success")
         
         return redirect(url_for('booking.index_view'))
@@ -228,7 +228,7 @@ class BookingAdmin(sqla.ModelView):
                 try:
                     scraper = get_scraper(login.current_user.email, login.current_user.cookie)
                     form.url.data = form.url.data or scraper.get_box_url()
-                except (LoginError, InvalidWodBusterResponse, RequestException) as e:
+                except (PasswordRequired, LoginError, InvalidWodBusterResponse, RequestException) as e:
                     logging.warning("Exception while loading BOX URL %s", e)
 
         return form
