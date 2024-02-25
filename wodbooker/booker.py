@@ -137,8 +137,8 @@ class Booker(StoppableThread):
                     self._booking.last_book_date = day_to_book
                     self._booking.booked_at = datetime.now().replace(microsecond=0)
                     self._booking.user.cookie = scraper.get_cookies()
-                except ClassNotFound:
-                    logging.warning("Class not found. Ignoring this week and attempting booking for next week")
+                except ClassNotFound as e:
+                    logging.warning("Class not found. Ignoring this week and attempting booking for next week %s", e)
                     skip_current_week = True
                     event = Event(booking_id=self._booking.id, event=_CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M")))
                     _add_event(event)
