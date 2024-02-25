@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from collections import defaultdict
 from flask import redirect, url_for, request, flash
 from wtforms import form, fields, validators
 from flask_admin.form.fields import TimeField
@@ -164,7 +165,18 @@ class BookingAdmin(sqla.ModelView):
         count, data = super().get_list(*args, **kwargs)
         for obj in data:
             obj.is_thread_active = is_booking_running(obj)
+            obj.last_events = self._get_last_events(obj.events)
         return count, data
+
+    @staticmethod
+    def _get_last_events(events):
+        if events:
+            events_by_date = defaultdict(list)
+            for event in events:
+                events_by_date[event.date.strftime("%d/%m/%Y %H:%M")].append(event)
+            max_date = max(events_by_date.keys())
+            return events_by_date[max_date]
+        return events
 
     def get_query(self):
         query = super().get_query()
