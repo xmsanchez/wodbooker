@@ -155,6 +155,7 @@ class Scraper():
         :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
         :raises RequestException: If a network error occurs or an HTTP error code is received
         :raises ClassNotFound: If there is no class at the given date and time
+        :raises BookingFailed: If the booking request fails
         """
         self.login()
 
@@ -183,7 +184,9 @@ class Scraper():
                 api_path = "Calendario_Mover.ashx" if class_status == "Cambiable" else "Calendario_Inscribir.ashx"
                 logging.info("Using API path %s to join user to class", api_path)
                 book_result = self._book_request(f'{url}/athlete/handlers/{api_path}?id={_id}&ticks={epoch}')
-                if not book_result['Res']['EsCorrecto']:
+                if book_result['Res']['EsCorrecto']:
+                    return True
+                else:
                     raise BookingFailed(book_result.get("Res", {}).get("ErrorMsg"))
 
         raise ClassNotFound(f"Class for {hour} not found on {booking_datetime.date().strftime('%d/%m/%Y')}")
