@@ -8,7 +8,8 @@ import sseclient
 import pytz
 from bs4 import BeautifulSoup
 from .exceptions import LoginError, InvalidWodBusterResponse, \
-    BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox
+    BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox, \
+    ClassNotFound, BookingFailed
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
@@ -153,6 +154,7 @@ class Scraper():
         protection, etc.)
         :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
         :raises RequestException: If a network error occurs or an HTTP error code is received
+        :raises ClassNotFound: If there is no class at the given date and time
         """
         self.login()
 
@@ -181,9 +183,10 @@ class Scraper():
                 api_path = "Calendario_Mover.ashx" if class_status == "Cambiable" else "Calendario_Inscribir.ashx"
                 logging.info("Using API path %s to join user to class", api_path)
                 book_result = self._book_request(f'{url}/athlete/handlers/{api_path}?id={_id}&ticks={epoch}')
-                return book_result['Res']['EsCorrecto']
+                if not book_result['Res']['EsCorrecto']:
+                    raise BookingFailed(book_result.get("Res", {}).get("ErrorMsg"))
 
-        return False
+        raise ClassNotFound(f"Class for {hour} not found on {booking_datetime.date().strftime('%d/%m/%Y')}")
 
     def get_classes(self, url: str, date: datetime.date) -> tuple:
         """ 

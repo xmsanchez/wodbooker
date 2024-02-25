@@ -9,7 +9,8 @@ from requests.exceptions import RequestException
 
 from .scraper import get_scraper, Scraper
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
-    ClassIsFull, LoginError, PasswordRequired, InvalidBox
+    ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
+    ClassNotFound, BookingFailed
 from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
@@ -22,7 +23,6 @@ __CURRENT_THREADS = {
 _CLASS_WAITING_OVER = "La clase del %s ya ha pasado y no se pudo reservar. Comenzando reserva para el %s"
 _WAIT_UNTIL_BOOKING_OPEN = "Esperando hasta el %s cuando las reservas para el %s estén disponibles"
 _BOOKING_COMPLETED = "Reserva para el %s completada correctamente"
-_UNKNOWN_BOOKING_ERROR = "La clase no se ha podido reservar por un motivo desconocido. Se ignora esta semana y se intentará reservar para el mismo día de la siguiente semana"
 _CLASS_FULL = "La clase del %s está llena. Esperando a que haya plazas disponibles"
 _WAIT_CLASS_LOADED = "Esperando a que las clases del día %s estén cargadas"
 _UNEXPECTED_NETWORK_ERROR = "Error inesperado de red. Esperando %s segundos antes de volver a intentarlo..."
@@ -31,6 +31,9 @@ _CREDENTIALS_EXPIRED = "Tus credenciales están caducadas. Vuelve a logarte y ac
 _LOGIN_FAILED = "Login fallido: credenciales inválidas. Vuelve a logarte y vuelve a intentarlo"
 _INVALID_BOX_URL = "La URL del box introducida no es válida o no tienes acceso al mismo. Actualiza la URL y vuelve a intentarlo"
 _TOO_MANY_ERRORS = "Se han producido demasiados errores al intentar reservar. Reserva parada"
+_IGNORE_WEEK_MESSAGE = "Se ignora esta semana y se intentará reservar para el mismo día de la siguiente semana"
+_CLASS_NOT_FOUND = f"El %s no hay clase a las %s. {_IGNORE_WEEK_MESSAGE}"
+_BOOKING_ERROR = f"Error al reservar la clase del %s: %s. {_IGNORE_WEEK_MESSAGE}"
 _PAUSED = "Pausado"
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
@@ -91,18 +94,24 @@ class Booker(StoppableThread):
             force_exit = False
             waiter = None
             datetime_to_book = None
+            skip_current_week = False
             while errors < _MAX_ERRORS and not force_exit:
                 try:
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
                     book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
                     _datetime_to_book = _get_datetime_to_book(self._booking.last_book_date, self._booking.dow, book_time)
+
                     if waiter and datetime_to_book != _datetime_to_book:
                         logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M'))
                         event = Event(booking_id=self._booking.id,
                                       event=_CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
                         _add_event(event)
                         waiter = None
+                    elif datetime_to_book == _datetime_to_book and skip_current_week:
+                        _datetime_to_book = _datetime_to_book + timedelta(days=7)
+                        skip_current_week = False
+
                     datetime_to_book = _datetime_to_book
                     day_to_book = datetime_to_book.date()
 
@@ -119,21 +128,25 @@ class Booker(StoppableThread):
                         waiter.wait()
                     waiter = None
 
-                    if scraper.book(self._booking.url, datetime_to_book):
-                        logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
-                        event = Event(booking_id=self._booking.id, event=_BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
-                        _add_event(event)
-                        errors = 0
-                    else:
-                        logging.warning("Impossible to book classes for %s for %s. Class is already booked or user cannot book. Igoning week and attempting booking for next week",
-                                        self._booking.user.email, datetime_to_book)
-                        event = Event(booking_id=self._booking.id, event=_UNKNOWN_BOOKING_ERROR)
-                        _add_event(event)
-                        errors = 0
+                    scraper.book(self._booking.url, datetime_to_book)
+                    logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
+                    event = Event(booking_id=self._booking.id, event=_BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
+                    _add_event(event)
+                    errors = 0
 
                     self._booking.last_book_date = day_to_book
                     self._booking.booked_at = datetime.now().replace(microsecond=0)
                     self._booking.user.cookie = scraper.get_cookies()
+                except ClassNotFound:
+                    logging.warning("Class not found. Ignoring this week and attempting booking for next week")
+                    skip_current_week = True
+                    event = Event(booking_id=self._booking.id, event=_CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M")))
+                    _add_event(event)
+                except BookingFailed as e:
+                    logging.warning("Class cannot be booked %s", e)
+                    skip_current_week = True
+                    event = Event(booking_id=self._booking.id, event=_BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
+                    _add_event(event)
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, _CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
@@ -141,13 +154,13 @@ class Booker(StoppableThread):
                 except BookingNotAvailable as e:
                     if e.available_at:
                         logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
-                        waiter = waiter or _TimeWaiter(self._booking, _WAIT_UNTIL_BOOKING_OPEN % (e.available_at.strftime('%d/%m/%Y a las %H:%M'),
-                                                                                                  day_to_book.strftime('%d/%m/%Y')),
-                                                       e.available_at)
+                        waiter = _TimeWaiter(self._booking, _WAIT_UNTIL_BOOKING_OPEN % (e.available_at.strftime('%d/%m/%Y a las %H:%M'),
+                                                                                        day_to_book.strftime('%d/%m/%Y')),
+                                             e.available_at)
                     else:
                         logging.info("Classes for %s are not loaded yet. Waiting for any type of event", day_to_book.strftime('%d/%m/%Y'))
                         waiter = _EventWaiter(self._booking, _WAIT_CLASS_LOADED % day_to_book.strftime('%d/%m/%Y'),
-                                              scraper, self._booking.url, day_to_book, 
+                                              scraper, self._booking.url, day_to_book,
                                               ['changedPizarra', 'changedBooking'], datetime_to_book)
                     continue
                 except RequestException as e:

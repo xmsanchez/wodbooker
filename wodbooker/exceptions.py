@@ -35,3 +35,14 @@ class InvalidBox(Exception):
     """
     Raises when the provided box is invalid
     """
+
+
+class ClassNotFound(Exception):
+    """
+    Raises when the class is not found
+    """
+
+class BookingFailed(Exception):
+    """
+    Raises when the booking fails
+    """
