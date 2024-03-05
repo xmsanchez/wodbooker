@@ -173,7 +173,7 @@ class BookingAdmin(sqla.ModelView):
         if events:
             events_by_date = defaultdict(list)
             for event in events:
-                events_by_date[event.date.strftime("%d/%m/%Y %H:%M")].append(event)
+                events_by_date[event.date.strftime("%Y%m%d%H:%M")].append(event)
             max_date = max(events_by_date.keys())
             return events_by_date[max_date]
         return events
