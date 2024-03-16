@@ -53,7 +53,7 @@ else:
     db.init_app(app)
 
 
-def init_login():
+def _init_login():
     login_manager = login.LoginManager()
     login_manager.init_app(app)
 
@@ -67,7 +67,7 @@ def init_login():
 def index():
     return redirect('/admin')
 
-init_login()
+_init_login()
 
 # Create admin
 admin = Admin(app, name='WodBooker', index_view=MyAdminIndexView(),
@@ -79,20 +79,26 @@ admin.add_view(EventView(Event, db.session, 'Eventos'))
 
 # Start booking loop
 with app.app_context():
-    bookings = db.session.query(Booking).all()
-    for booking in bookings:
-        if booking.is_active:
-            start_booking_loop(booking)
+    _bookings = db.session.query(Booking).all()
+    for _booking in _bookings:
+        if _booking.is_active:
+            start_booking_loop(_booking)
 
 # Start events cleaning loop
-def cleaning_loop(app_context):
+def _cleaning_loop(app_context):
     app_context.push()
     with app_context:
         while True:
             logging.info("Cleaning events older than 15 days")
-            db.session.query(Event).filter(Event.date < datetime.now() - timedelta(days=15)).delete()
+            bookings = db.session.query(Booking).all()
+            for booking in bookings:
+                events_older_than_15_days = list(filter(lambda x: x.date < datetime.now() - timedelta(days=15),
+                                                        booking.events))
+                events_older_than_15_days = sorted(events_older_than_15_days, key=lambda x: x.date)
+                for event in events_older_than_15_days[:-1]:
+                    db.session.delete(event)
             db.session.commit()
             time.sleep(60 * 60 * 24)
 
-thread = threading.Thread(target=cleaning_loop, args=(app.app_context(),))
+thread = threading.Thread(target=_cleaning_loop, args=(app.app_context(),))
 thread.start()
