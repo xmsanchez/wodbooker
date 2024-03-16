@@ -59,8 +59,10 @@ class Scraper():
                                                     headers=_HEADERS, allow_redirects=False, timeout=10)
 
             if "Location" in road_to_box_request.headers and "login" in road_to_box_request.headers["Location"]:
+                logging.warning("Cookie for user %s is outdated. Attempting logging with password...", self._user)
                 self._login_with_username_and_password()
             else:
+                logging.info("User %s logged successfully with cookie", self._user)
                 self.logged = True
         else:
             self._login_with_username_and_password()
@@ -117,6 +119,7 @@ class Scraper():
         if confirm_login_request.status_code != 200:
             raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
 
+        logging.info("User %s logged successfully with credentials", self._user)
         self.logged = True
 
     def _login_request(self, url, viewstatec, eventvalidation, csrftoken, extra_fields):
