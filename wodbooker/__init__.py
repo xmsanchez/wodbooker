@@ -93,9 +93,9 @@ def _cleaning_loop(app_context):
             bookings = db.session.query(Booking).all()
             for booking in bookings:
                 events_older_than_15_days = list(filter(lambda x: x.date < datetime.now() - timedelta(days=15),
-                                                        booking.events))
+                                                        booking.events[:-1]))
                 events_older_than_15_days = sorted(events_older_than_15_days, key=lambda x: x.date)
-                for event in events_older_than_15_days[:-1]:
+                for event in events_older_than_15_days:
                     db.session.delete(event)
             db.session.commit()
             time.sleep(60 * 60 * 24)
