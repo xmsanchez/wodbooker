@@ -6,7 +6,7 @@ import pytz
 from flask import current_app as app
 from func_timeout import StoppableThread
 from requests.exceptions import RequestException
-
+from .constants import EventMessage
 from .scraper import get_scraper, Scraper
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
@@ -20,21 +20,6 @@ _MAX_ERRORS = 5
 __CURRENT_THREADS = {
 }
 
-_CLASS_WAITING_OVER = "La clase del %s ya ha pasado y no se pudo reservar. Comenzando reserva para el %s"
-_WAIT_UNTIL_BOOKING_OPEN = "Esperando hasta el %s cuando las reservas para el %s estén disponibles"
-_BOOKING_COMPLETED = "Reserva para el %s completada correctamente"
-_CLASS_FULL = "La clase del %s está llena. Esperando a que haya plazas disponibles"
-_WAIT_CLASS_LOADED = "Esperando a que las clases del día %s estén cargadas"
-_UNEXPECTED_NETWORK_ERROR = "Error inesperado de red. Esperando %s segundos antes de volver a intentarlo..."
-_UNEXPECTED_WODBUSTER_RESPONSE = "Respuesta inesperada de WodBuster. Esperando %s segundos antes de volver a intentarlo..."
-_CREDENTIALS_EXPIRED = "Tus credenciales están caducadas. Vuelve a logarte y actualiza esta entrada para reactivar las reservas"
-_LOGIN_FAILED = "Login fallido: credenciales inválidas. Vuelve a logarte y vuelve a intentarlo"
-_INVALID_BOX_URL = "La URL del box introducida no es válida o no tienes acceso al mismo. Actualiza la URL y vuelve a intentarlo"
-_TOO_MANY_ERRORS = "Se han producido demasiados errores al intentar reservar. Reserva parada"
-_IGNORE_WEEK_MESSAGE = "Se ignora esta semana y se intentará reservar para el mismo día de la siguiente semana"
-_CLASS_NOT_FOUND = f"El %s no hay clase a las %s. {_IGNORE_WEEK_MESSAGE}"
-_BOOKING_ERROR = f"Error al reservar la clase del %s: %s. {_IGNORE_WEEK_MESSAGE}"
-_PAUSED = "Pausado"
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
     """ 
@@ -105,7 +90,7 @@ class Booker(StoppableThread):
                     if waiter and datetime_to_book != _datetime_to_book:
                         logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M'))
                         event = Event(booking_id=self._booking.id,
-                                      event=_CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
+                                      event=EventMessage.CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
                         _add_event(event)
                         waiter = None
                     elif datetime_to_book == _datetime_to_book and skip_current_week:
@@ -120,8 +105,8 @@ class Booker(StoppableThread):
                             day_to_book - timedelta(days=self._booking.offset),
                             self._booking.available_at))
 
-                    waiter = waiter or _TimeWaiter(self._booking, _WAIT_UNTIL_BOOKING_OPEN % (book_available_at.strftime('%d/%m/%Y a las %H:%M'),
-                                                                                              day_to_book.strftime('%d/%m/%Y')),
+                    waiter = waiter or _TimeWaiter(self._booking, EventMessage.WAIT_UNTIL_BOOKING_OPEN % (book_available_at.strftime('%d/%m/%Y a las %H:%M'),
+                                                                                                          day_to_book.strftime('%d/%m/%Y')),
                                                    book_available_at)
 
                     if waiter:
@@ -130,7 +115,7 @@ class Booker(StoppableThread):
 
                     scraper.book(self._booking.url, datetime_to_book)
                     logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
-                    event = Event(booking_id=self._booking.id, event=_BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
+                    event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
                     errors = 0
 
@@ -140,62 +125,62 @@ class Booker(StoppableThread):
                 except ClassNotFound as e:
                     logging.warning("Class not found. Ignoring this week and attempting booking for next week %s", e)
                     skip_current_week = True
-                    event = Event(booking_id=self._booking.id, event=_CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M")))
+                    event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M")))
                     _add_event(event)
                 except BookingFailed as e:
                     logging.warning("Class cannot be booked %s", e)
                     skip_current_week = True
-                    event = Event(booking_id=self._booking.id, event=_BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
+                    event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
                     _add_event(event)
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
-                    waiter = _EventWaiter(self._booking, _CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
+                    waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingNotAvailable as e:
                     if e.available_at:
                         logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
-                        waiter = _TimeWaiter(self._booking, _WAIT_UNTIL_BOOKING_OPEN % (e.available_at.strftime('%d/%m/%Y a las %H:%M'),
-                                                                                        day_to_book.strftime('%d/%m/%Y')),
+                        waiter = _TimeWaiter(self._booking, EventMessage.WAIT_UNTIL_BOOKING_OPEN % (e.available_at.strftime('%d/%m/%Y a las %H:%M'),
+                                                                                                    day_to_book.strftime('%d/%m/%Y')),
                                              e.available_at)
                     else:
                         logging.info("Classes for %s are not loaded yet. Waiting for any type of event", day_to_book.strftime('%d/%m/%Y'))
-                        waiter = _EventWaiter(self._booking, _WAIT_CLASS_LOADED % day_to_book.strftime('%d/%m/%Y'),
+                        waiter = _EventWaiter(self._booking, EventMessage.WAIT_CLASS_LOADED % day_to_book.strftime('%d/%m/%Y'),
                                               scraper, self._booking.url, day_to_book,
                                               ['changedPizarra', 'changedBooking'], datetime_to_book)
                     continue
                 except RequestException as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Request Exception: %s", e)
-                    waiter = _TimeWaiter(self._booking, _UNEXPECTED_NETWORK_ERROR % sleep_for,
+                    waiter = _TimeWaiter(self._booking, EventMessage.UNEXPECTED_NETWORK_ERROR % sleep_for,
                                             datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     errors += 1
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
                     logging.warning("Invalid WodBuster response: %s", e)
-                    waiter = _TimeWaiter(self._booking, _UNEXPECTED_WODBUSTER_RESPONSE % sleep_for,
+                    waiter = _TimeWaiter(self._booking, EventMessage.UNEXPECTED_WODBUSTER_RESPONSE % sleep_for,
                                          datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     errors += 1
                 except PasswordRequired:
                     force_exit = True
                     logging.warning("Credentials for user %s are outdated. Aborting...", self._booking.user.email)
-                    event = Event(booking_id=self._booking.id, event=_CREDENTIALS_EXPIRED)
+                    event = Event(booking_id=self._booking.id, event=EventMessage.CREDENTIALS_EXPIRED)
                     _add_event(event)
                 except LoginError:
                     force_exit = True
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
-                    event = Event(booking_id=self._booking.id, event=_LOGIN_FAILED)
+                    event = Event(booking_id=self._booking.id, event=EventMessage.LOGIN_FAILED)
                     _add_event(event)
                 except InvalidBox:
                     force_exit = True
                     logging.warning("User %s accessing to an invalid box detected. Aborting...", self._booking.user.email)
-                    event = Event(booking_id=self._booking.id, event=_INVALID_BOX_URL)
+                    event = Event(booking_id=self._booking.id, event=EventMessage.INVALID_BOX_URL)
                     _add_event(event)
                 finally:
                     db.session.commit()
 
             if errors >= _MAX_ERRORS:
                 logging.error("Exiting thread as maximum number of retries has been reached. Review logs for more information")
-                event = Event(booking_id=self._booking.id, event=_TOO_MANY_ERRORS)
+                event = Event(booking_id=self._booking.id, event=EventMessage.TOO_MANY_ERRORS)
                 _add_event(event)
                 db.session.commit()
             logging.info("Exiting thread...")
@@ -315,7 +300,7 @@ def stop_booking_loop(booking: Booking, log_pause: bool=False) -> None:
         del __CURRENT_THREADS[booking.id]
 
         if log_pause:
-            event = Event(booking_id=booking.id, event=_PAUSED)
+            event = Event(booking_id=booking.id, event=EventMessage.PAUSED)
             _add_event(event)
             db.session.commit()
 

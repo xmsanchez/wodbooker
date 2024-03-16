@@ -17,6 +17,7 @@ from .models import User, db, Booking
 from .booker import start_booking_loop, stop_booking_loop, is_booking_running
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
+from .constants import EventMessage
 
 _DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 _NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí " + \
@@ -171,6 +172,12 @@ class BookingAdmin(sqla.ModelView):
     @staticmethod
     def _get_last_events(events):
         if events:
+            events_values = list(map(lambda x: x.event, events))
+            if events_values[-1] == EventMessage.PAUSED:
+                return [events[-1]]
+            if EventMessage.PAUSED in events_values:
+                last_paused_index = len(events_values) - 1 - events_values[::-1].index(EventMessage.PAUSED)
+                events = events[last_paused_index + 1:]
             events_by_date = defaultdict(list)
             for event in events:
                 events_by_date[event.date.strftime("%Y%m%d%H:%M")].append(event)

@@ -58,14 +58,10 @@
                 <p>
                   <b>Estado</b><br/>
                   {% if row['last_events'] %}
-                    {{ row['last_events'][-1]['date'].strftime('%d/%m/%Y %H:%M') }}: 
-                    {% if row["is_active"] %}
-                      {% for event in row['last_events'] %}
-                        {{ event['event'].rstrip(".") }}.
-                      {% endfor %}
-                    {% else %}
-                      {{ row['last_events'][-1]['event'].rstrip(".") }}.
-                    {% endif %}
+                    {{ row['last_events'][0]['date'].strftime('%d/%m/%Y %H:%M') }}: 
+                    {% for event in row['last_events'] %}
+                      {{ event['event'].rstrip(".") }}.
+                    {% endfor %}
                     <br /><a href="/admin/event/?search=%3D{{row['id']}}">Ver todos <i class="bi bi-arrow-up-right"></i></a>
                   {% else %}
                     <i>Arrancando...</i>
