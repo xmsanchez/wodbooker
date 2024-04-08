@@ -1,5 +1,9 @@
 from enum import StrEnum
 
+DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+UNEXPECTED_ERROR_MAIL_SUBJECT = "Error en la reserva"
+UNEXPECTED_ERROR_MAIL_BODY = "En este momento es imposible gestionar tu reserva por un error inesperado. Te recomendamos acceder a WodBuster y hacer la reserva manualmente"
 
 class EventMessage(StrEnum):
     CLASS_WAITING_OVER = "La clase del %s ya ha pasado y no se pudo reservar. Comenzando reserva para el %s"

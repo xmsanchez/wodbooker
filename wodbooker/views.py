@@ -17,9 +17,8 @@ from .models import User, db, Booking
 from .booker import start_booking_loop, stop_booking_loop, is_booking_running
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
-from .constants import EventMessage
+from .constants import EventMessage, DAYS_OF_WEEK
 
-_DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 _NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí " + \
         "cuando la reserva esté activa según vayan ocurriendo."
 
@@ -131,11 +130,11 @@ class BookingAdmin(sqla.ModelView):
     create_template = 'admin/booking/create.html'
 
     column_formatters = dict(
-        dow=lambda v, c, m, p: _DAYS_OF_WEEK[m.dow],
+        dow=lambda v, c, m, p: DAYS_OF_WEEK[m.dow],
         time=lambda v, c, m, p: m.time.strftime('%H:%M'),
         available_at=lambda v, c, m, p: m.available_at.strftime('%H:%M'),
         last_book_date=lambda v, c, m, p: m.last_book_date.strftime('%d/%m/%Y') if m.last_book_date else "",
-        offset=lambda v, c, m, p: _DAYS_OF_WEEK[m.dow - m.offset],
+        offset=lambda v, c, m, p: DAYS_OF_WEEK[m.dow - m.offset],
     )
 
     column_extra_row_actions = [  # Add a new action button
@@ -262,7 +261,7 @@ class EventView(sqla.ModelView):
     list_template = 'admin/event/list.html'
 
     column_formatters = dict(
-        booking=lambda v, c, m, p: _DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M'),
+        booking=lambda v, c, m, p: DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M'),
         date=lambda v, c, m, p: m.date.strftime('%d/%m/%Y %H:%M'),
     )
 

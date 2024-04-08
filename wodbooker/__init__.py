@@ -13,6 +13,7 @@ from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView
 from .models import User, Booking, Event, db
 from .booker import start_booking_loop
+from .mailer import process_maling_queue
 
 # Configure logging
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
@@ -100,5 +101,12 @@ def _cleaning_loop(app_context):
             db.session.commit()
             time.sleep(60 * 60 * 24)
 
-thread = threading.Thread(target=_cleaning_loop, args=(app.app_context(),))
-thread.start()
+thread_cleaner = threading.Thread(target=_cleaning_loop,
+                                  args=(app.app_context(),),
+                                  daemon=True, name="dbcleaner")
+thread_cleaner.start()
+
+thread_mailer = threading.Thread(target=process_maling_queue,
+                                 args=(app.app_context(),),
+                                 daemon=True, name="mailer")
+thread_mailer.start()
