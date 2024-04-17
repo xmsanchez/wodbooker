@@ -84,8 +84,6 @@ class Booker(StoppableThread):
             skip_current_week = False
             while errors < _MAX_ERRORS and not force_exit:
                 try:
-                    # Refresh the scraper in case a new one is avaiable
-                    scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
                     book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
                     _datetime_to_book = _get_datetime_to_book(self._booking.last_book_date, self._booking.dow, book_time)
 
@@ -115,6 +113,8 @@ class Booker(StoppableThread):
                         waiter.wait()
                     waiter = None
 
+                    # Refresh the scraper in case a new one is avaiable
+                    scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
                     scraper.book(self._booking.url, datetime_to_book)
                     logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))

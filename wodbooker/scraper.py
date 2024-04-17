@@ -121,6 +121,7 @@ class Scraper():
 
         logging.info("User %s logged successfully with credentials", self._user)
         self.logged = True
+        self._password = None
 
     def _login_request(self, url, viewstatec, eventvalidation, csrftoken, extra_fields):
         data = {
