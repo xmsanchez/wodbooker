@@ -1,8 +1,10 @@
 import os
+import os.path as op
 from datetime import datetime, timedelta
 import time
 import threading
-import os.path as op
+import pickle
+import requests
 import logging
 from flask import Flask, redirect, request, session
 
@@ -62,6 +64,29 @@ def _init_login():
     @login_manager.user_loader
     def load_user(user_id):
         return db.session.query(User).get(user_id)
+
+
+@app.before_request
+def check_session_expired():
+    """
+    Check if the session has expired and logout the user if it has
+    """
+    if request.path.startswith("/admin") and "static" not in request.path \
+            and login.current_user.is_authenticated:
+        user = User.query.filter_by(email=login.current_user.email).first()
+        if user:
+            _session = requests.Session()
+            _session.cookies.update(pickle.loads(user.cookie))
+            try:
+                expiration_timestamp = next(x for x in _session.cookies if x.name == '.WBAuth').expires
+                expiration_date = datetime.fromtimestamp(expiration_timestamp)
+                if datetime.now() > expiration_date:
+                    login.logout_user()
+            except (StopIteration, TypeError):
+                logging.exception("Error while getting expiration date of cookie")
+        else:
+            logging.warning("User with email %s not found in database", login.current_user.email)
+            login.logout_user()
 
 
 @app.route('/')

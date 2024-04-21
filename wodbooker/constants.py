@@ -13,7 +13,7 @@ class EventMessage(StrEnum):
     WAIT_CLASS_LOADED = "Esperando a que las clases del día %s estén cargadas"
     UNEXPECTED_NETWORK_ERROR = "Error inesperado de red. Esperando %s segundos antes de volver a intentarlo..."
     UNEXPECTED_WODBUSTER_RESPONSE = "Respuesta inesperada de WodBuster. Esperando %s segundos antes de volver a intentarlo..."
-    CREDENTIALS_EXPIRED = "Tus credenciales están caducadas. Vuelve a logarte y actualiza esta entrada para reactivar las reservas"
+    CREDENTIALS_EXPIRED = "Tus credenciales están caducadas. Vuelve a logarte y edita esta reserva para que vuelva a activarse"
     LOGIN_FAILED = "Login fallido: credenciales inválidas. Vuelve a logarte y vuelve a intentarlo"
     INVALID_BOX_URL = "La URL del box introducida no es válida o no tienes acceso al mismo. Actualiza la URL y vuelve a intentarlo"
     TOO_MANY_ERRORS = "Se han producido demasiados errores al intentar reservar. Reserva parada"

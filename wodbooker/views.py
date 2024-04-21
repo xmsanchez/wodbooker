@@ -88,7 +88,7 @@ class MyAdminIndexView(AdminIndexView):
         form = LoginForm(request.form)
         if helpers.validate_form_on_submit(form):
             user = form.get_user()
-            login.login_user(user, remember=True, duration=timedelta(days=14))
+            login.login_user(user, remember=True)
 
         if login.current_user.is_authenticated:
             return redirect(url_for('booking.index_view'))
@@ -288,3 +288,4 @@ class EventView(sqla.ModelView):
     def inaccessible_callback(self, name, **kwargs):
         # redirect to login page if user doesn't have access
         return redirect(url_for('admin.login_view', next=request.url))
+
