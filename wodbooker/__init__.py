@@ -90,8 +90,11 @@ def check_session_expired():
 
 @app.before_request
 def redirect_admin():
+    """
+    Redirect users from deprecated /admin/... to /...
+    """
     if request.path.startswith('/admin'):
-        return redirect(request.path.replace('/admin', ''))
+        return redirect(request.full_path.replace('/admin', ''))
 
 _init_login()
 
