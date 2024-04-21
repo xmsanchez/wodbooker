@@ -71,8 +71,7 @@ def check_session_expired():
     """
     Check if the session has expired and logout the user if it has
     """
-    if request.path.startswith("/admin") and "static" not in request.path \
-            and login.current_user.is_authenticated:
+    if "static" not in request.path and login.current_user.is_authenticated:
         user = User.query.filter_by(email=login.current_user.email).first()
         if user:
             _session = requests.Session()
@@ -89,14 +88,15 @@ def check_session_expired():
             login.logout_user()
 
 
-@app.route('/')
-def index():
-    return redirect('/admin')
+@app.before_request
+def redirect_admin():
+    if request.path.startswith('/admin'):
+        return redirect(request.path.replace('/admin', ''))
 
 _init_login()
 
 # Create admin
-admin = Admin(app, name='WodBooker', index_view=MyAdminIndexView(),
+admin = Admin(app, name='WodBooker', index_view=MyAdminIndexView(url="/"),
               base_template='base.html', template_mode='bootstrap4')
 
 # Add views
