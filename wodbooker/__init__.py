@@ -3,10 +3,11 @@ import os.path as op
 from datetime import datetime, timedelta
 import time
 import threading
+import subprocess
 import pickle
 import requests
 import logging
-from flask import Flask, redirect, request, session
+from flask import Flask, redirect, request, session, g
 
 from flask_admin import Admin
 import flask_login as login
@@ -81,11 +82,21 @@ def check_session_expired():
                 expiration_date = datetime.fromtimestamp(expiration_timestamp)
                 if datetime.now() > expiration_date:
                     login.logout_user()
+                else:
+                    g.cookie_expiration_date = expiration_date.strftime("%d/%m/%Y a las %H:%M")
             except (StopIteration, TypeError):
                 logging.exception("Error while getting expiration date of cookie")
         else:
             logging.warning("User with email %s not found in database", login.current_user.email)
             login.logout_user()
+
+
+@app.before_request
+def set_version():
+    """
+    Set version in g object
+    """
+    g.version = subprocess.check_output(["git", "describe", "--tags"]).strip().decode('utf-8')
 
 
 @app.before_request
