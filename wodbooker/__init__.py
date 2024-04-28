@@ -96,7 +96,12 @@ def set_version():
     """
     Set version in g object
     """
-    g.version = subprocess.check_output(["git", "describe", "--tags"]).strip().decode('utf-8')
+    if "static" in request.path:
+        return
+
+    git_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.git"
+    g.version = subprocess.check_output(["git", f"--git-dir={git_dir}",
+                                         "describe", "--tags"]).strip().decode('utf-8')
 
 
 @app.before_request
