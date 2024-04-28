@@ -4,6 +4,11 @@ DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
 
 UNEXPECTED_ERROR_MAIL_SUBJECT = "Error en la reserva"
 UNEXPECTED_ERROR_MAIL_BODY = "En este momento es imposible gestionar tu reserva por un error inesperado. Te recomendamos acceder a WodBuster y hacer la reserva manualmente"
+FULL_CLASS_BOOKED_MAIL_SUBJECT = "Clase reservada"
+FULL_CLASS_BOOKED_MAIL_BODY = "¡Enhorabuena! Parece que se quedó una plaza libre y he conseguido reservarte la clase. ¡Nos vemos en el box!"
+ERROR_AUTOHEALED_MAIL_SUBJECT = "Clase reservada"
+ERROR_AUTOHEALED_MAIL_BODY = "Parece que he podido recuperarme del error y he conseguido reservar la clase. ¡A darlo todo en el box!"
+
 
 class EventMessage(StrEnum):
     CLASS_WAITING_OVER = "La clase del %s ya ha pasado y no se pudo reservar. Comenzando reserva para el %s"

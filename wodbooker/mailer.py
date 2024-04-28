@@ -15,8 +15,22 @@ _CHARSET = "UTF-8"
 _ERROR_HTML_TEMPLATE = """<html>
     <head></head>
     <body>
-        <h3>WodBooker - Error en la reserva del %s a las %s:</h3>
-        <p>%s</a>.</p>
+        <h3>WodBooker - Error en la reserva del {0} a las {1}:</h3>
+        <p>{2}</a>.</p>
+        <p style="font-size: small">Box: <a href="{3}">{3}</a></p>
+        <p style="font-size: small">Mensaje automático generado por <a href="https://home.aitormagan.es">WodBooker</a>. 
+        Puedes consultar todos los eventos asociados a esta reserva <a href="https://home.aitormagan.es/event/?search=%3D{4}">aquí</a>.</p>
+    </body>
+</html>"""
+
+_SUCCESS_HTML_TEMPLATE = """<html>
+    <head></head>
+    <body>
+        <h3>WodBooker - Reservada con éxito la clase del {0} a las {1}:</h3>
+        <p>{2}</a></p>
+        <p style="font-size: small">Box: <a href="{3}">{3}</a></p>
+        <p style="font-size: small">Mensaje automático generado por <a href="https://home.aitormagan.es">WodBooker</a>. 
+        Puedes consultar todos los eventos asociados a esta reserva <a href="https://home.aitormagan.es/event/?search=%3D{4}">aquí</a>.</p>
     </body>
 </html>"""
 
@@ -25,6 +39,9 @@ class Email(ABC):
     """
     Email templates
     """
+
+    def __init__(self, subject):
+        self.subject = subject
 
     @abstractmethod
     def get_html(self):
@@ -38,11 +55,11 @@ class Email(ABC):
         Returns the mail plain body
         """
 
-    @abstractmethod
     def get_subject(self):
         """
         Returns the mail subject
         """
+        return f"[WodBooker] {self.subject}"
 
 
 class ErrorEmail(Email):
@@ -50,20 +67,38 @@ class ErrorEmail(Email):
     Error email template
     """
     def __init__(self, booking, subject, error):
+        super().__init__(subject)
         self.booking = booking
         self.error = error
         self.subject = subject
 
     def get_html(self):
-        return _ERROR_HTML_TEMPLATE % (DAYS_OF_WEEK[self.booking.dow], 
-                                       self.booking.time.strftime("%H:%M"), 
-                                       self.error)
+        return _ERROR_HTML_TEMPLATE.format(DAYS_OF_WEEK[self.booking.dow],
+                                           self.booking.time.strftime("%H:%M"),
+                                           self.error, self.booking.url,
+                                           self.booking.id)
 
     def get_plain_body(self):
         return self.error
 
-    def get_subject(self):
-        return f"[WodBooker] {self.subject}"
+
+class SuccessEmail(Email):
+    """
+    Success email template
+    """
+    def __init__(self, booking, subject, message):
+        super().__init__(subject)
+        self.booking = booking
+        self.message = message
+
+    def get_html(self):
+        return _SUCCESS_HTML_TEMPLATE.format(DAYS_OF_WEEK[self.booking.dow],
+                                             self.booking.time.strftime("%H:%M"),
+                                             self.message, self.booking.url,
+                                             self.booking.id)
+
+    def get_plain_body(self):
+        return self.message
 
 
 def send_email(user: User, email: Email):
