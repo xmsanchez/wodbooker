@@ -21,6 +21,7 @@ from .constants import EventMessage, DAYS_OF_WEEK
 
 _NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí " + \
         "cuando la reserva esté activa según vayan ocurriendo."
+_MAX_BOOKINGS_BY_USER = 10
 
 
 class LoginForm(FlaskForm):
@@ -120,7 +121,6 @@ class BookingForm(form.Form):
                 Booking.time==self.time.data,
                 Booking.id!=request.args.get('id'))).first():
             raise validators.ValidationError("Ya existe una reserva para ese día de la semana, hora y box")
-
 
 class BookingAdmin(sqla.ModelView):
     form = BookingForm
@@ -224,6 +224,11 @@ class BookingAdmin(sqla.ModelView):
         return redirect(url_for('admin.login_view', next=request.url))
 
     def create_model(self, form):
+        user_bookings = self.session.query(Booking).filter(Booking.user == login.current_user).count()
+        if user_bookings >= _MAX_BOOKINGS_BY_USER:
+            flash(f'Cada usuario puede crear como máximo {_MAX_BOOKINGS_BY_USER} reservas', 'error')
+            return False
+
         booking = super().create_model(form)
         booking.user = login.current_user
         db.session.flush()
