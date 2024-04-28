@@ -19,8 +19,6 @@ from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
 from .constants import EventMessage, DAYS_OF_WEEK
 
-_NO_EVENTS = "Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí " + \
-        "cuando la reserva esté activa según vayan ocurriendo."
 _MAX_BOOKINGS_BY_USER = 10
 
 
