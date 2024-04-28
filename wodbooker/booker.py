@@ -312,7 +312,7 @@ def start_booking_loop(booking: Booking) -> None:
     logging.info("Starting thread for booking %s", booking.id)
     booker = Booker(booking, app.app_context())
     __CURRENT_THREADS[booking.id] = booker
-    # booker.start()
+    booker.start()
 
 def stop_booking_loop(booking: Booking, log_pause: bool=False) -> None:
     """ 
