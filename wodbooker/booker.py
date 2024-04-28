@@ -82,6 +82,7 @@ class Booker(StoppableThread):
             waiter = None
             datetime_to_book = None
             skip_current_week = False
+            class_is_full_notification_sent = False
             while errors < _MAX_ERRORS and not force_exit:
                 try:
                     book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
@@ -92,6 +93,7 @@ class Booker(StoppableThread):
                         event = Event(booking_id=self._booking.id,
                                       event=EventMessage.CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
                         _add_event(event)
+                        class_is_full_notification_sent = False
                         waiter = None
                     elif datetime_to_book == _datetime_to_book and skip_current_week:
                         _datetime_to_book = _datetime_to_book + timedelta(days=7)
@@ -120,6 +122,7 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
                     errors = 0
+                    class_is_full_notification_sent = False
 
                     self._booking.last_book_date = day_to_book
                     self._booking.booked_at = datetime.now().replace(microsecond=0)
@@ -140,7 +143,9 @@ class Booker(StoppableThread):
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
-                    send_email(self._booking.user, ErrorEmail(self._booking, "Clase llena", waiter.log_message))
+                    if not class_is_full_notification_sent:
+                        send_email(self._booking.user, ErrorEmail(self._booking, "Clase llena", waiter.log_message))
+                        class_is_full_notification_sent = True
                 except BookingNotAvailable as e:
                     if e.available_at:
                         logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
