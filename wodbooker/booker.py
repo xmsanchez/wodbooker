@@ -11,7 +11,7 @@ from .constants import EventMessage, UNEXPECTED_ERROR_MAIL_SUBJECT, \
     FULL_CLASS_BOOKED_MAIL_BODY, ERROR_AUTOHEALED_MAIL_SUBJECT, \
     ERROR_AUTOHEALED_MAIL_BODY
 from .scraper import get_scraper, Scraper
-from .mailer import send_email, ErrorEmail, SuccessEmail
+from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed
@@ -124,13 +124,17 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
 
+                    email = None
                     if errors > 0:
-                        send_email(self._booking.user, SuccessEmail(self._booking, ERROR_AUTOHEALED_MAIL_SUBJECT, ERROR_AUTOHEALED_MAIL_BODY))
+                        email = SuccessAfterErrorEmail(self._booking, ERROR_AUTOHEALED_MAIL_SUBJECT, ERROR_AUTOHEALED_MAIL_BODY)
                         errors = 0
 
                     if class_is_full_notification_sent:
-                        send_email(self._booking.user, SuccessEmail(self._booking, FULL_CLASS_BOOKED_MAIL_SUBJECT, FULL_CLASS_BOOKED_MAIL_BODY))
+                        email = SuccessAfterErrorEmail(self._booking, FULL_CLASS_BOOKED_MAIL_SUBJECT, FULL_CLASS_BOOKED_MAIL_BODY)
                         class_is_full_notification_sent = False
+
+                    email = email or SuccessEmail(self._booking, "A", "B")
+                    send_email(self._booking.user, email)
 
                     self._booking.last_book_date = day_to_book
                     self._booking.booked_at = datetime.now().replace(microsecond=0)

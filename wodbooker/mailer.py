@@ -1,4 +1,5 @@
 import logging
+from enum import Enum
 from abc import abstractmethod, ABC
 from queue import Queue
 import boto3
@@ -12,27 +13,37 @@ _queue = Queue()
 
 _SENDER = "WodBooker <wodbooker@aitormagan.es>"
 _CHARSET = "UTF-8"
+_HOST = "home.aitormagan.es"
 _ERROR_HTML_TEMPLATE = """<html>
     <head></head>
     <body>
-        <h3>WodBooker - Error en la reserva del {0} a las {1}:</h3>
-        <p>{2}</a>.</p>
-        <p style="font-size: small">Box: <a href="{3}">{3}</a></p>
-        <p style="font-size: small">Mensaje automático generado por <a href="https://home.aitormagan.es">WodBooker</a>. 
-        Puedes consultar todos los eventos asociados a esta reserva <a href="https://home.aitormagan.es/event/?search=%3D{4}">aquí</a>.</p>
+        <h3>WodBooker - Error en la reserva del {1} a las {2}:</h3>
+        <p>{3}</a>.</p>
+        <p style="font-size: small">Box: <a href="{4}">{4}</a>
+        Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
+        <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
+        Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
+        </p>
     </body>
 </html>"""
 
 _SUCCESS_HTML_TEMPLATE = """<html>
     <head></head>
     <body>
-        <h3>WodBooker - Reservada con éxito la clase del {0} a las {1}:</h3>
-        <p>{2}</a></p>
-        <p style="font-size: small">Box: <a href="{3}">{3}</a></p>
-        <p style="font-size: small">Mensaje automático generado por <a href="https://home.aitormagan.es">WodBooker</a>. 
-        Puedes consultar todos los eventos asociados a esta reserva <a href="https://home.aitormagan.es/event/?search=%3D{4}">aquí</a>.</p>
+        <h3>WodBooker - Reservada con éxito la clase del {1} a las {2}:</h3>
+        <p>{3}</a></p>
+        <p style="font-size: small">Box: <a href="{4}">{4}</a>
+        Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
+        <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
+        Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
+        </p>
     </body>
 </html>"""
+
+
+class EmailPermissions(Enum):
+    FAILURE = "mail_permission_failure"
+    SUCCESS = "mail_permission_success"
 
 
 class Email(ABC):
@@ -44,22 +55,28 @@ class Email(ABC):
         self.subject = subject
 
     @abstractmethod
-    def get_html(self):
+    def get_html(self) -> str:
         """
         Returns the mail HTML
         """
 
     @abstractmethod
-    def get_plain_body(self):
+    def get_plain_body(self) -> str:
         """
         Returns the mail plain body
         """
 
-    def get_subject(self):
+    def get_subject(self) -> str:
         """
         Returns the mail subject
         """
         return f"[WodBooker] {self.subject}"
+
+    @abstractmethod
+    def required_permission(self) -> EmailPermissions:
+        """
+        Returns the permission required to send the email
+        """
 
 
 class ErrorEmail(Email):
@@ -72,8 +89,11 @@ class ErrorEmail(Email):
         self.error = error
         self.subject = subject
 
+    def required_permission(self):
+        return EmailPermissions.FAILURE
+
     def get_html(self):
-        return _ERROR_HTML_TEMPLATE.format(DAYS_OF_WEEK[self.booking.dow],
+        return _ERROR_HTML_TEMPLATE.format(_HOST, DAYS_OF_WEEK[self.booking.dow],
                                            self.booking.time.strftime("%H:%M"),
                                            self.error, self.booking.url,
                                            self.booking.id)
@@ -91,14 +111,26 @@ class SuccessEmail(Email):
         self.booking = booking
         self.message = message
 
+    def required_permission(self):
+        return EmailPermissions.SUCCESS
+
     def get_html(self):
-        return _SUCCESS_HTML_TEMPLATE.format(DAYS_OF_WEEK[self.booking.dow],
+        return _SUCCESS_HTML_TEMPLATE.format(_HOST, DAYS_OF_WEEK[self.booking.dow],
                                              self.booking.time.strftime("%H:%M"),
                                              self.message, self.booking.url,
                                              self.booking.id)
 
     def get_plain_body(self):
         return self.message
+
+
+class SuccessAfterErrorEmail(SuccessEmail):
+    """
+    Mails sent with a success but when an error event occurred before
+    """
+
+    def required_permission(self):
+        return EmailPermissions.FAILURE
 
 
 def send_email(user: User, email: Email):
@@ -118,34 +150,39 @@ def _send_email(user: User, email: Email):
     """
 
     to = user.email
-    try:
-        client.send_email(
-            Destination={
-                'ToAddresses': [
-                    to,
-                ],
-            },
-            Message={
-                'Body': {
-                    'Html': {
-                        'Charset': _CHARSET,
-                        'Data': email.get_html(),
+    mail_allowed = getattr(user, email.required_permission().value, False)
+
+    if mail_allowed:
+        try:
+            client.send_email(
+                Destination={
+                    'ToAddresses': [
+                        to,
+                    ],
+                },
+                Message={
+                    'Body': {
+                        'Html': {
+                            'Charset': _CHARSET,
+                            'Data': email.get_html(),
+                        },
+                        'Text': {
+                            'Charset': _CHARSET,
+                            'Data': email.get_plain_body(),
+                        },
                     },
-                    'Text': {
+                    'Subject': {
                         'Charset': _CHARSET,
-                        'Data': email.get_plain_body(),
+                        'Data': email.get_subject(),
                     },
                 },
-                'Subject': {
-                    'Charset': _CHARSET,
-                    'Data': email.get_subject(),
-                },
-            },
-            Source=_SENDER,
-        )
-        logging.info("Email '%s' sent to %s successfully", email.get_subject(), to)
-    except ClientError:
-        logging.exception("Error sending email")
+                Source=_SENDER,
+            )
+            logging.info("Email '%s' sent to %s successfully", email.get_subject(), to)
+        except ClientError:
+            logging.exception("Error sending email")
+    else:
+        logging.info("Email to '%s' not sent because of permissions", to)
 
 
 def process_maling_queue(app_context):
