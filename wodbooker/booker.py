@@ -9,7 +9,8 @@ from requests.exceptions import RequestException
 from .constants import EventMessage, UNEXPECTED_ERROR_MAIL_SUBJECT, \
     UNEXPECTED_ERROR_MAIL_BODY, FULL_CLASS_BOOKED_MAIL_SUBJECT, \
     FULL_CLASS_BOOKED_MAIL_BODY, ERROR_AUTOHEALED_MAIL_SUBJECT, \
-    ERROR_AUTOHEALED_MAIL_BODY
+    ERROR_AUTOHEALED_MAIL_BODY, CLASS_BOOKED_MAIL_SUBJECT, \
+    CLASS_BOOKED_MAIL_BODY
 from .scraper import get_scraper, Scraper
 from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
@@ -133,7 +134,7 @@ class Booker(StoppableThread):
                         email = SuccessAfterErrorEmail(self._booking, FULL_CLASS_BOOKED_MAIL_SUBJECT, FULL_CLASS_BOOKED_MAIL_BODY)
                         class_is_full_notification_sent = False
 
-                    email = email or SuccessEmail(self._booking, "A", "B")
+                    email = email or SuccessEmail(self._booking, CLASS_BOOKED_MAIL_SUBJECT, CLASS_BOOKED_MAIL_BODY)
                     send_email(self._booking.user, email)
 
                     self._booking.last_book_date = day_to_book

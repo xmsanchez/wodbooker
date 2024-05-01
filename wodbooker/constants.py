@@ -8,6 +8,8 @@ FULL_CLASS_BOOKED_MAIL_SUBJECT = "Clase reservada"
 FULL_CLASS_BOOKED_MAIL_BODY = "¡Enhorabuena! Parece que se quedó una plaza libre y he conseguido reservarte la clase. ¡Nos vemos en el box!"
 ERROR_AUTOHEALED_MAIL_SUBJECT = "Clase reservada"
 ERROR_AUTOHEALED_MAIL_BODY = "Parece que he podido recuperarme del error y he conseguido reservar la clase. ¡A darlo todo en el box!"
+CLASS_BOOKED_MAIL_SUBJECT = "Clase reservada con éxito"
+CLASS_BOOKED_MAIL_BODY = "La clase se ha reservado con éxito. ¡Disfruta del WOD!"
 
 
 class EventMessage(StrEnum):
