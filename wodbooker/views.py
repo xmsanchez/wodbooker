@@ -1,6 +1,8 @@
 import logging
-from datetime import timedelta
+from datetime import datetime
 from collections import defaultdict
+import pickle
+import requests
 from flask import redirect, url_for, request, flash
 from wtforms import form, fields, validators
 from flask_admin.form.fields import TimeField
@@ -57,6 +59,7 @@ class LoginForm(FlaskForm):
         existing_user = db.session.query(User).filter_by(email=self.email.data).first()
         if existing_user:
             existing_user.cookie = self._scraper.get_cookies()
+            existing_user.force_login = False
             db.session.commit()
             return existing_user
         else:
@@ -292,3 +295,70 @@ class EventView(sqla.ModelView):
         # redirect to login page if user doesn't have access
         return redirect(url_for('admin.login_view', next=request.url))
 
+
+class UserForm(form.Form):
+
+    mail_permission_success = fields.BooleanField('Recibir notificaciones de reservas exitosas')
+    mail_permission_failure = fields.BooleanField('Recibir notificaciones de fallos en reservas')
+
+
+class UserView(sqla.ModelView):
+
+    form = UserForm
+
+    can_create = False
+    can_delete = False
+    can_edit = True
+
+    edit_template = 'admin/user/edit.html'
+    list_template = 'admin/user/list.html'
+
+    column_formatters = dict(
+        cookie=lambda v, c, m, p: _get_cookie_expiration_date(m.cookie),
+    )
+
+    def is_visible(self):
+        return False
+
+    def get_query(self):
+        query = super().get_query().filter(User.id==login.current_user.id)
+        return query
+
+    def get_count_query(self):
+        return super().get_count_query().filter(User.id==login.current_user.id)
+
+    def get_one(self, id):
+        result = super().get_one(id)
+        if result and result.id != login.current_user.id:
+            return None
+        return result
+
+    def update_model(self, form, model):
+        if login.current_user.is_authenticated and model.id != login.current_user.id:
+            flash("No estás autorizado a editar este elemento", "warning")
+            return False
+
+        return super().update_model(form, model)
+
+    def is_accessible(self):
+        return login.current_user.is_authenticated
+
+    def inaccessible_callback(self, name, **kwargs):
+        # redirect to login page if user doesn't have access
+        return redirect(url_for('admin.login_view', next=request.url))
+
+    def get_list(self, *args, **kwargs):
+        count, data = super().get_list(*args, **kwargs)
+        for obj in data:
+            obj.cookie_expiration_date = _get_cookie_expiration_date(obj.cookie)
+        return count, data
+
+
+def _get_cookie_expiration_date(cookie):
+    session = requests.Session()
+    session.cookies.update(pickle.loads(cookie))
+    try:
+        expiration_timestamp = next(x for x in session.cookies if x.name == '.WBAuth').expires
+        return datetime.fromtimestamp(expiration_timestamp).strftime('%d/%m/%Y a las %H:%M')
+    except (StopIteration, TypeError):
+        return None

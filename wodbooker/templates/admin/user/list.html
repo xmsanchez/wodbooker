@@ -1,0 +1,30 @@
+{% extends 'admin/model/list.html' %}
+
+{% block model_menu_bar %}
+  <div>
+    <p class="text-right"><a class="btn btn-primary" href="{{ get_url('.edit_view', url=return_url, id=data[0].id, modal=True) }}" role="button"><i class="bi bi-pencil-fill"></i> Preferencias Email</a></p>
+  </div>
+{% endblock %}
+
+{% block model_list_table %}
+<div class="container-fluid">
+  <p>
+    <b>Usuario WodBuster</b><br/>
+    {{ data[0].email }}
+  </p>
+  <p>
+    <b>Fecha caducidad cookie WodBuster</b><br/>
+    {{ data[0].cookie_expiration_date }}
+  </p>
+  <p>
+    <b>Recibir notificaciones de reservas exitosas</b><br/>
+    {{ "Sí" if data[0].mail_permission_success else "No" }}
+  </p>
+  <p>
+    <b>Recibir notificaciones de fallos en reservas</b><br/>
+    {{ "Sí" if data[0].mail_permission_failure else "No" }}
+  </p>
+
+</div>
+
+{% endblock %}

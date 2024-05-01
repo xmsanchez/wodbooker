@@ -34,6 +34,9 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True)
     cookie = db.Column(db.String(1024))
+    force_login = db.Column(db.Boolean, default=False)
+    mail_permission_success = db.Column(db.Boolean, default=True)
+    mail_permission_failure = db.Column(db.Boolean, default=True)
 
     # Flask-Login integration
     # NOTE: is_authenticated, is_active, and is_anonymous

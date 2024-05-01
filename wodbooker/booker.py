@@ -187,12 +187,14 @@ class Booker(StoppableThread):
                 except PasswordRequired:
                     force_exit = True
                     logging.warning("Credentials for user %s are outdated. Aborting...", self._booking.user.email)
+                    self._booking.user.force_login = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.CREDENTIALS_EXPIRED)
                     _add_event(event)
                     send_email(self._booking.user, ErrorEmail(self._booking, "Credenciales caducadas", event.event))
                 except LoginError:
                     force_exit = True
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
+                    self._booking.user.force_login = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.LOGIN_FAILED)
                     _add_event(event)
                     send_email(self._booking.user, ErrorEmail(self._booking, "Login fallido", event.event))

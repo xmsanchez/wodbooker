@@ -13,7 +13,7 @@ from flask_admin import Admin
 import flask_login as login
 from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
-from .views import MyAdminIndexView, BookingAdmin, EventView
+from .views import MyAdminIndexView, BookingAdmin, EventView, UserView
 from .models import User, Booking, Event, db
 from .booker import start_booking_loop
 from .mailer import process_maling_queue
@@ -79,22 +79,18 @@ def check_session_expired():
     Check if the session has expired and logout the user if it has
     """
     if "static" not in request.path and login.current_user.is_authenticated:
-        user = User.query.filter_by(email=login.current_user.email).first()
-        if user:
+        if login.current_user.force_login:
+            login.logout_user()
+        else:
             _session = requests.Session()
-            _session.cookies.update(pickle.loads(user.cookie))
+            _session.cookies.update(pickle.loads(login.current_user.cookie))
             try:
                 expiration_timestamp = next(x for x in _session.cookies if x.name == '.WBAuth').expires
                 expiration_date = datetime.fromtimestamp(expiration_timestamp)
                 if datetime.now() > expiration_date:
                     login.logout_user()
-                else:
-                    g.cookie_expiration_date = expiration_date.strftime("%d/%m/%Y a las %H:%M")
             except (StopIteration, TypeError):
                 logging.exception("Error while getting expiration date of cookie")
-        else:
-            logging.warning("User with email %s not found in database", login.current_user.email)
-            login.logout_user()
 
 
 @app.before_request
@@ -122,6 +118,7 @@ admin = Admin(app, name='WodBooker', index_view=MyAdminIndexView(url="/"),
 # Add views
 admin.add_view(BookingAdmin(Booking, db.session, 'Reservas'))
 admin.add_view(EventView(Event, db.session, 'Eventos'))
+admin.add_view(UserView(User, db.session, 'Usuarios'))
 
 # Start booking loop
 with app.app_context():

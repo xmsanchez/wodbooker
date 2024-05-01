@@ -19,20 +19,26 @@
       margin-bottom: 60px;
     }
 
+    .btn-text-white {
+      color: white;
+    }
+
   </style>
 {% endblock %}
 
 {% block access_control %}
-{% if current_user.is_authenticated %}
-<div class="btn-group pull-right">
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="icon-user"></i> {{ current_user.email }} <span class="caret"></span>
-    </a>
-    <ul class="dropdown-menu">
-        <li><a href="{{ url_for('admin.logout_view') }}">Log out</a></li>
-    </ul>
-</div>
-{% endif %}
+  {% if current_user.is_authenticated %}
+    <div class="btn-group pull-right dropdown">
+      <button class="btn btn-text-white dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        {{ current_user.email}}
+      </button>
+      <ul class="dropdown-menu">
+        <a class="dropdown-item" href="{{ url_for('user.index_view') }}">Editar</a>
+        <div class="dropdown-divider"></div>
+        <a class="dropdown-item" href="{{ url_for('admin.logout_view') }}">Cerrar Sesión</a>
+      </ul>
+    </div>
+  {% endif %}
 {% endblock %}
 
 {% block tail %}
