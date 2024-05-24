@@ -4,12 +4,12 @@ This Flask application allows WodBuster users to create booking requests which w
 
 Users has to authenticate with the app using their WodBuster credentials. The app will check this credentials with WodBuster and will allow users to sign in only when the credentials are valid.
 
-One logged in, users are allowed to create booking requests. To do so, they are required to introduce:
+Once logged in, users are allowed to create booking requests. To do so, they are required to introduce:
 
 * Day of week: The day of the week the booking is intended to.
 * Hour: The hour of the day the booking is intented to.
 * WodBuster box URL: Every box has a different WodBuster URL. Users are required to introduce the one specific to their box. This is required for users with access to multiple boxes.
-* Days in advance: The number of days in advance with which the class can be reserved
+* Days in advance: The number of days in advance with which the class can be booked.
 * Booking opening hour: The time of the day when the first booking attempt should be executed. 
 
 Once the request is created, a thread will take care of it by:
