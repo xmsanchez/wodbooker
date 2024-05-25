@@ -4,6 +4,18 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 {% endblock %}
 {% block model_menu_bar %}
+  {% set error_ns = namespace(error=False) %}
+  {% for row in data %}
+    {% if row['is_active'] and not row['is_thread_active'] %}
+      {% set error_ns.error = True %}
+    {% endif %}
+  {% endfor %}
+  {% if error_ns.error %}
+    <div class="alert alert-warning" role="alert">
+      <h3>Debes revisar tus reservas</h3>
+      <p>Las reservas marcadas con el símbolo <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i> están desactivadas porque se produjo algún error con las mismas. Para que vuelvan a estar activas, revisa el estado de las mismas y corrige los errores. Si el problema es derivado de que la sesión caducó, simplemente desactiva la reserva y vuelve a activarla.</p>
+    </div>
+  {% endif %}
   <div>
     <p class="text-right"><a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a></p>
   </div>
@@ -21,7 +33,7 @@
             <h2 class="mb-0 mr-auto">
               <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}">
                   <h4 style="margin-bottom: 0px;">{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}
-                    {% if row["is_active"] and not row['is_thread_active'] %}
+                    {% if row['is_active'] and not row['is_thread_active'] %}
                       <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
                     {% endif %}
                   </h4>
