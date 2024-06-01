@@ -28,3 +28,16 @@ Run the app by just running:
 ```
 python3 app.py
 ```
+
+## GCP Cloud Run
+
+```bash
+gcloud builds submit --tag gcr.io/$GCLOUD_PROJECT/wodbooker . && \
+gcloud run deploy wodbooker \
+    --image gcr.io/$GCLOUD_PROJECT/wodbooker \
+    --port 5000 \
+    --region europe-west1 \
+    --platform managed \
+    --allow-unauthenticated \
+    --quiet
+```

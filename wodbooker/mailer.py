@@ -11,9 +11,9 @@ client = boto3.client('ses',region_name="eu-west-1")
 
 _queue = Queue()
 
-_SENDER = "WodBooker <wodbooker@aitormagan.es>"
+_SENDER = "WodBooker <wodbooker@xavimiranda.es>"
 _CHARSET = "UTF-8"
-_HOST = "home.aitormagan.es"
+_HOST = "home.xavimiranda.es"
 _ERROR_HTML_TEMPLATE = """<html>
     <head></head>
     <body>
@@ -139,7 +139,8 @@ def send_email(user: User, email: Email):
     :param user: The user to send the email to
     :param email: The mail to be sent
     """
-    _queue.put((user, email))
+    pass
+    # _queue.put((user, email))
 
 
 def _send_email(user: User, email: Email):

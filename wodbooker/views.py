@@ -27,7 +27,7 @@ _MAX_BOOKINGS_BY_USER = 10
 class LoginForm(FlaskForm):
     email = fields.StringField(validators=[validators.DataRequired()])
     password = fields.PasswordField(validators=[validators.DataRequired()])
-    recaptcha = RecaptchaField(validators=[Recaptcha("Verifica que no eres un robot")])
+    #recaptcha = RecaptchaField(validators=[Recaptcha("Verifica que no eres un robot")])
 
     def __init__(self, formdata, **kwargs):
         super().__init__(formdata=formdata, **kwargs)

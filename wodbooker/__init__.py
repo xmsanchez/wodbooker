@@ -21,10 +21,10 @@ from .mailer import process_maling_queue
 # Configure logging
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
 
-# Get version
-__git_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.git"
-_VERSION = subprocess.check_output(["git", f"--git-dir={__git_dir}",
-                                        "describe", "--tags"]).strip().decode('utf-8')
+# # Get version
+# __git_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.git"
+# _VERSION = subprocess.check_output(["git", f"--git-dir={__git_dir}",
+#                                         "describe", "--tags"]).strip().decode('utf-8')
 
 
 def get_locale():
@@ -98,7 +98,8 @@ def set_version():
     """
     Set version in g object
     """
-    g.version = _VERSION
+    # Not sure why is this used in the original code
+    g.version = "DUMMY"
 
 
 @app.before_request
