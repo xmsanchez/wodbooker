@@ -96,12 +96,14 @@ class Booker(StoppableThread):
                         event = Event(booking_id=self._booking.id,
                                       event=EventMessage.CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
                         _add_event(event)
+                        print(f'Event is: ' + str(event.event))
                         class_is_full_notification_sent = False
                         waiter = None
                     elif datetime_to_book == _datetime_to_book and skip_current_week:
                         _datetime_to_book = _datetime_to_book + timedelta(days=7)
                         skip_current_week = False
 
+                    logging.info("got here")
                     datetime_to_book = _datetime_to_book
                     day_to_book = datetime_to_book.date()
 
@@ -120,7 +122,7 @@ class Booker(StoppableThread):
 
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
-                    scraper.book(self._booking.url, datetime_to_book)
+                    scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
                     logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)

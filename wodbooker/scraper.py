@@ -145,7 +145,7 @@ class Scraper():
         index = text.index(header_name)
         return text[index + len(header_name) + 1:].split("|")[0]
 
-    def book(self, url: str, booking_datetime: datetime) -> bool:
+    def book(self, url: str, booking_datetime: datetime, type_class: str) -> bool:
         """ 
         Book a class at the given box for the given date. True is returned if the booking was successful
         :param url: The WodBuster URL associated to the box where the class has to be booked
@@ -174,13 +174,18 @@ class Scraper():
             raise BookingNotAvailable('No classes available', avaiable_at)
 
         for _class in classes['Data']:
+            logging.debug("Checking class %s", _class['Hora'])
+            logging.debug(json.dumps(_class))
+
+            logging.info(f'Type class is {type_class}')
+
             if _class['Hora'] == hour:
-                class_status = _class['Valores'][0]['TipoEstado']
+                class_status = _class['Valores'][type_class]['TipoEstado']
 
                 if class_status == "Borrable":
                     return True
 
-                class_details = _class['Valores'][0]['Valor']
+                class_details = _class['Valores'][type_class]['Valor']
                 _id = class_details['Id']
                 if len(class_details['AtletasEntrenando']) >= class_details['Plazas']:
                     raise ClassIsFull("Class is full")

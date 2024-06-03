@@ -79,6 +79,15 @@
                     <i>Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí cuando la reserva esté activa según vayan ocurriendo.</i>
                   {% endif %}
                 </p>
+                <b>Tipo de clase</b><br/>
+                {% if row['type_class'] %}
+                  {% if row['type_class'] == 1 %}
+                    OpenBox
+                  {% else %}
+                    Wod
+                  {% endif %}
+                {% endif %}
+              </p>  
               </div>
             </div>
           </div>

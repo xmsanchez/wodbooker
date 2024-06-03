@@ -112,6 +112,9 @@ class BookingForm(form.Form):
     url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)', validators=[validators.DataRequired()])
     offset = fields.IntegerField('Días de antelación para reservar', validators=[validators.DataRequired()])
     available_at = TimeField('Hora de apertura de reservas', validators=[validators.DataRequired()])
+    type_class = fields.SelectField('Tipo de clase a reservar (wod, openbox)', choices=[(0, 'wod'), (1, 'openbox')], 
+                                    validators=[validators.DataRequired()], 
+                                    description="Algunos días puede haber simultáneamente wod y openbox. Selecciona aquí el tipo de clase que deseas reservar.")
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(
@@ -246,6 +249,7 @@ class BookingAdmin(sqla.ModelView):
                 form.url.data = form.url.data or last_booking.url
                 form.offset.data = form.offset.data or last_booking.offset
                 form.available_at.data = form.available_at.data or last_booking.available_at
+                form.type_class.data = form.type_class.data or last_booking.type_class
             else:
                 try:
                     scraper = get_scraper(login.current_user.email, login.current_user.cookie)
