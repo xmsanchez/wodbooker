@@ -1,29 +1,27 @@
 import logging
+import os
 from enum import Enum
 from abc import abstractmethod, ABC
 from queue import Queue
-import boto3
-from botocore.exceptions import ClientError
+import smtplib
+from email.mime.text import MIMEText
+from email.message import EmailMessage
 from .models import User
 from .constants import DAYS_OF_WEEK
-
-client = boto3.client('ses',region_name="eu-west-1")
 
 _queue = Queue()
 
 _SENDER = "WodBooker <wodbooker@xavimiranda.es>"
-_CHARSET = "UTF-8"
+_MAIL = "xmfreak@gmail.com"
+_PASSWORD = os.getenv('EMAIL_PASSWORD')
 _HOST = "home.xavimiranda.es"
+
 _ERROR_HTML_TEMPLATE = """<html>
     <head></head>
     <body>
         <h3>WodBooker - Error en la reserva del {1} a las {2}:</h3>
         <p>{3}</a>.</p>
-        <p style="font-size: small">Box: <a href="{4}">{4}</a>
-        Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
-        <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
-        Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
-        </p>
+        <p style="font-size: small">Box: <a href="{4}">{4}</a></p>
     </body>
 </html>"""
 
@@ -32,13 +30,35 @@ _SUCCESS_HTML_TEMPLATE = """<html>
     <body>
         <h3>WodBooker - Reservada con éxito la clase del {1} a las {2}:</h3>
         <p>{3}</a></p>
-        <p style="font-size: small">Box: <a href="{4}">{4}</a>
-        Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
-        <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
-        Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
-        </p>
+        <p style="font-size: small">Box: <a href="{4}">{4}</a></p>
     </body>
 </html>"""
+
+# _ERROR_HTML_TEMPLATE = """<html>
+#     <head></head>
+#     <body>
+#         <h3>WodBooker - Error en la reserva del {1} a las {2}:</h3>
+#         <p>{3}</a>.</p>
+#         <p style="font-size: small">Box: <a href="{4}">{4}</a>
+#         Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
+#         <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
+#         Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
+#         </p>
+#     </body>
+# </html>"""
+
+# _SUCCESS_HTML_TEMPLATE = """<html>
+#     <head></head>
+#     <body>
+#         <h3>WodBooker - Reservada con éxito la clase del {1} a las {2}:</h3>
+#         <p>{3}</a></p>
+#         <p style="font-size: small">Box: <a href="{4}">{4}</a>
+#         Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
+#         <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
+#         Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
+#         </p>
+#     </body>
+# </html>"""
 
 
 class EmailPermissions(Enum):
@@ -139,8 +159,7 @@ def send_email(user: User, email: Email):
     :param user: The user to send the email to
     :param email: The mail to be sent
     """
-    pass
-    # _queue.put((user, email))
+    _queue.put((user, email))
 
 
 def _send_email(user: User, email: Email):
@@ -155,32 +174,19 @@ def _send_email(user: User, email: Email):
 
     if mail_allowed:
         try:
-            client.send_email(
-                Destination={
-                    'ToAddresses': [
-                        to,
-                    ],
-                },
-                Message={
-                    'Body': {
-                        'Html': {
-                            'Charset': _CHARSET,
-                            'Data': email.get_html(),
-                        },
-                        'Text': {
-                            'Charset': _CHARSET,
-                            'Data': email.get_plain_body(),
-                        },
-                    },
-                    'Subject': {
-                        'Charset': _CHARSET,
-                        'Data': email.get_subject(),
-                    },
-                },
-                Source=_SENDER,
-            )
-            logging.info("Email '%s' sent to %s successfully", email.get_subject(), to)
-        except ClientError:
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
+                msg = EmailMessage()
+                msg.set_content(email.get_html())
+                msg['To'] = to
+                msg['From'] = _SENDER
+                msg['Subject'] = email.get_subject()
+                msg.add_alternative(email.get_html(), subtype='html')
+
+                smtp_server.login(_MAIL, _PASSWORD)
+                smtp_server.send_message(msg)
+
+                logging.info("Email '%s' sent to %s successfully", email.get_subject(), to)
+        except Exception:
             logging.exception("Error sending email")
     else:
         logging.info("Email to '%s' not sent because of permissions", to)
