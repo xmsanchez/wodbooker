@@ -41,3 +41,26 @@ gcloud run deploy wodbooker \
     --allow-unauthenticated \
     --quiet
 ```
+
+## Running locally (raspberry pi)
+
+### Requirements
+
+Install docker
+
+### Setup
+
+Build images, create docker network
+
+```bash
+docker network create net
+docker build -t nginx-wodbooker ./nginx/Dockerfile
+docker build -t wodbooker .
+```
+
+Run containers:
+
+```bash
+docker run --rm -p 5001:5001 --network=net -e EMAIL_PASSWORD=${EMAIL_PASSWORD} -v $(pwd):/app --name wodbooker wodbooker
+docker run --rm --name nginx-wodbooker  --network=net -p 80:80 nginx-wodbooker
+```

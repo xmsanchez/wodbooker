@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+   nginx:
+      build: ./nginx/
+      image: nginx-wodbooker
+      volumes:
+         - ./nginx:/etc/nginx/conf.d
+      ports:
+         - "80:80"
+
+   wodbooker:
+      build: .
+      image: wodbooker
+      expose:
+         - "5000"

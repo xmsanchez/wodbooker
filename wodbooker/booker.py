@@ -103,7 +103,6 @@ class Booker(StoppableThread):
                         _datetime_to_book = _datetime_to_book + timedelta(days=7)
                         skip_current_week = False
 
-                    logging.info("got here")
                     datetime_to_book = _datetime_to_book
                     day_to_book = datetime_to_book.date()
 
