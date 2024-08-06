@@ -141,3 +141,7 @@ cython_debug/
 .DS*
 # Db
 db.sqlite
+
+nginx/conf.d
+nginx/letsencrypt/**
+nginx/nginx.conf
