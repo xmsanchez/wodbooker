@@ -15,7 +15,7 @@ from .scraper import get_scraper, Scraper
 from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
-    ClassNotFound, BookingFailed
+    ClassNotFound, BookingFailed, BookingPenalization
 from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
@@ -147,20 +147,19 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M")))
                     _add_event(event)
                     send_email(self._booking.user, ErrorEmail(self._booking, "Clase no encontrada", event.event))
-                except BookingFailed as e:
-                    # In Mayanti box a penalty has been set in place when people makes a book cancellation
-                    # This should be managed in the scraper.py book function but I don't really know
-                    # What's the API response and I won't risk it so I'll treat it as a "CLASS IS FULL" event
-                    if "Opps, demasiado pronto" in e:
-                        logging.warning("There is a penalty for your bookings this week: %s", e)
-                        waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
+                # In Mayanti box a penalty has been set in place when people makes a book cancellation
+                # This should be managed in the scraper.py book function but I don't really know
+                # What's the API response and I won't risk it so I'll treat it as a "CLASS IS FULL" event
+                except BookingPenalization as e:
+                    logging.warning("There is a penalty for your bookings this week: %s", e)
+                    waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
-                    else:
-                        logging.warning("Class cannot be booked %s", e)
-                        skip_current_week = True
-                        event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
-                        _add_event(event)
-                        send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
+                except BookingFailed as e:
+                    logging.warning("Class cannot be booked %s", e)
+                    skip_current_week = True
+                    event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
+                    _add_event(event)
+                    send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),

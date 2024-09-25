@@ -196,7 +196,17 @@ class Scraper():
                 if book_result['Res']['EsCorrecto']:
                     return True
                 else:
-                    raise BookingFailed(book_result.get("Res", {}).get("ErrorMsg"))
+                    logging.info("Booking failed. Dict response: " + json.dumps(book_result))
+                    error_message = book_result.get("Res", {}).get("ErrorMsg")
+                    if "Penalización" in error_message:
+                        logging.info('Booking penalization. First conditional.')
+                        raise BookingPenalization(error_message)
+                    # Not sure if the above will work and I cannot test it, so...
+                    elif "Penalización" in json.dumps(book_result):
+                        logging.info('Booking penalization. Second conditional.')
+                        raise BookingPenalization(error_message)
+                    else:
+                        raise BookingFailed(error_message)
 
         raise ClassNotFound(f"Class for {hour} not found on {booking_datetime.date().strftime('%d/%m/%Y')}")
 

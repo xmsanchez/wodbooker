@@ -46,3 +46,8 @@ class BookingFailed(Exception):
     """
     Raises when the booking fails
     """
+
+class BookingPenalization(Exception):
+    """
+    Raises when there is a booking penalization and you book too soon
+    """
