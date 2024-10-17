@@ -37,6 +37,7 @@
                       <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
                     {% endif %}
                   </h4>
+                <p>Apertura reserva: {{ get_value(row, 'available_at') }}</p>
               </button>
             </h2>
             {{ list_row_actions[2].render_ctx(get_pk_value(row), row) }}

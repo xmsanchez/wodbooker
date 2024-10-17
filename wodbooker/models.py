@@ -28,7 +28,7 @@ class Event(db.Model):
     event = db.Column(db.String(256))
 
     def __str__(self):
-        return f"{self.date.strftime('%d/%m/%Y %H:%M')}: {self.event}"
+        return f"{self.date.strftime('%d/%m/%Y %H:%M:%S')}: {self.event}"
 
 
 class User(db.Model):

@@ -92,7 +92,7 @@ class Booker(StoppableThread):
                     _datetime_to_book = _get_datetime_to_book(self._booking.last_book_date, self._booking.dow, book_time)
 
                     if waiter and datetime_to_book != _datetime_to_book:
-                        logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M'))
+                        logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
                         event = Event(booking_id=self._booking.id,
                                       event=EventMessage.CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
                         _add_event(event)
@@ -111,7 +111,7 @@ class Booker(StoppableThread):
                             day_to_book - timedelta(days=self._booking.offset),
                             self._booking.available_at))
 
-                    waiter = waiter or _TimeWaiter(self._booking, EventMessage.WAIT_UNTIL_BOOKING_OPEN % (book_available_at.strftime('%d/%m/%Y a las %H:%M'),
+                    waiter = waiter or _TimeWaiter(self._booking, EventMessage.WAIT_UNTIL_BOOKING_OPEN % (book_available_at.strftime('%d/%m/%Y a las %H:%M:%S'),
                                                                                                           day_to_book.strftime('%d/%m/%Y')),
                                                    book_available_at)
 
@@ -122,7 +122,7 @@ class Booker(StoppableThread):
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
                     scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
-                    logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M'))
+                    logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
 
@@ -144,7 +144,7 @@ class Booker(StoppableThread):
                 except ClassNotFound as e:
                     logging.warning("Class not found. Ignoring this week and attempting booking for next week %s", e)
                     skip_current_week = True
-                    event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M")))
+                    event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M:%S")))
                     _add_event(event)
                     send_email(self._booking.user, ErrorEmail(self._booking, "Clase no encontrada", event.event))
                 # In Mayanti box a penalty has been set in place when people makes a book cancellation
@@ -169,8 +169,8 @@ class Booker(StoppableThread):
                         class_is_full_notification_sent = True
                 except BookingNotAvailable as e:
                     if e.available_at:
-                        logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M'))
-                        waiter = _TimeWaiter(self._booking, EventMessage.WAIT_UNTIL_BOOKING_OPEN % (e.available_at.strftime('%d/%m/%Y a las %H:%M'),
+                        logging.info("Class is not bookeable yet. Setting wait for datetime to %s", e.available_at.strftime('%d/%m/%Y %H:%M:%S'))
+                        waiter = _TimeWaiter(self._booking, EventMessage.WAIT_UNTIL_BOOKING_OPEN % (e.available_at.strftime('%d/%m/%Y a las %H:%M:%S'),
                                                                                                     day_to_book.strftime('%d/%m/%Y')),
                                              e.available_at)
                     else:

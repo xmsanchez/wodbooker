@@ -136,7 +136,7 @@ class BookingAdmin(sqla.ModelView):
     column_formatters = dict(
         dow=lambda v, c, m, p: DAYS_OF_WEEK[m.dow],
         time=lambda v, c, m, p: m.time.strftime('%H:%M'),
-        available_at=lambda v, c, m, p: m.available_at.strftime('%H:%M'),
+        available_at=lambda v, c, m, p: m.available_at.strftime('%H:%M:%S'),
         last_book_date=lambda v, c, m, p: m.last_book_date.strftime('%d/%m/%Y') if m.last_book_date else "",
         offset=lambda v, c, m, p: DAYS_OF_WEEK[m.dow - m.offset],
     )
@@ -271,7 +271,7 @@ class EventView(sqla.ModelView):
     list_template = 'admin/event/list.html'
 
     column_formatters = dict(
-        booking=lambda v, c, m, p: DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M'),
+        booking=lambda v, c, m, p: DAYS_OF_WEEK[m.booking.dow] + " " + m.booking.time.strftime('%H:%M:%S'),
         date=lambda v, c, m, p: m.date.strftime('%d/%m/%Y %H:%M'),
     )
 

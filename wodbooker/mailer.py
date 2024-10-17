@@ -114,7 +114,7 @@ class ErrorEmail(Email):
 
     def get_html(self):
         return _ERROR_HTML_TEMPLATE.format(_HOST, DAYS_OF_WEEK[self.booking.dow],
-                                           self.booking.time.strftime("%H:%M"),
+                                           self.booking.time.strftime("%H:%M:%S"),
                                            self.error, self.booking.url,
                                            self.booking.id)
 
@@ -136,7 +136,7 @@ class SuccessEmail(Email):
 
     def get_html(self):
         return _SUCCESS_HTML_TEMPLATE.format(_HOST, DAYS_OF_WEEK[self.booking.dow],
-                                             self.booking.time.strftime("%H:%M"),
+                                             self.booking.time.strftime("%H:%M:%S"),
                                              self.message, self.booking.url,
                                              self.booking.id)
 
