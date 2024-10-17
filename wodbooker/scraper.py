@@ -177,7 +177,9 @@ class Scraper():
             logging.debug("Checking class %s", _class['Hora'])
             logging.debug(json.dumps(_class))
 
-            logging.info(f'Type class is {type_class}')
+            ## Class type tells whether we need to book Wod or OpenBox class
+            ## For those bookings classes where there is a mix of both
+            # logging.info(f'Type class is {type_class}')
 
             if _class['Hora'] == hour:
                 class_status = _class['Valores'][type_class]['TipoEstado']
@@ -196,14 +198,10 @@ class Scraper():
                 if book_result['Res']['EsCorrecto']:
                     return True
                 else:
-                    logging.info("Booking failed. Dict response: " + json.dumps(book_result))
+                    logging.info("Booking failed.")
                     error_message = book_result.get("Res", {}).get("ErrorMsg")
                     if "Penalización" in error_message:
-                        logging.info('Booking penalization. First conditional.')
-                        raise BookingPenalization(error_message)
-                    # Not sure if the above will work and I cannot test it, so...
-                    elif "Penalización" in json.dumps(book_result):
-                        logging.info('Booking penalization. Second conditional.')
+                        logging.info('Booking penalization.')
                         raise BookingPenalization(error_message)
                     else:
                         raise BookingFailed(error_message)
