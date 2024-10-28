@@ -17,6 +17,7 @@ class EventMessage(StrEnum):
     WAIT_UNTIL_BOOKING_OPEN = "Esperando hasta el %s cuando las reservas para el %s estén disponibles"
     BOOKING_COMPLETED = "Reserva para el %s completada correctamente"
     CLASS_FULL = "La clase del %s está llena. Esperando a que haya plazas disponibles"
+    BOOKING_PENALIZATION = "%s. Se intentará de nuevo en cuanto termine la cuenta atrás."
     WAIT_CLASS_LOADED = "Esperando a que las clases del día %s estén cargadas"
     UNEXPECTED_NETWORK_ERROR = "Error inesperado de red. Esperando %s segundos antes de volver a intentarlo..."
     UNEXPECTED_WODBUSTER_RESPONSE = "Respuesta inesperada de WodBuster. Esperando %s segundos antes de volver a intentarlo..."

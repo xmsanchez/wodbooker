@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, date, time
 from abc import ABC, abstractmethod
+import random
 import logging
 import pause
 import pytz
@@ -121,6 +122,12 @@ class Booker(StoppableThread):
 
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
+
+                    # generate a random number in milliseconds to avoid being detected as a bot
+                    sleep = random.randint(1, 100)/100
+                    logging.info("Sleeping for %s seconds", sleep)
+                    pause.seconds(sleep)
+
                     scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
                     logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
@@ -152,7 +159,7 @@ class Booker(StoppableThread):
                 # What's the API response and I won't risk it so I'll treat it as a "CLASS IS FULL" event
                 except BookingPenalization as e:
                     logging.warning("There is a penalty for your bookings this week: %s", e)
-                    waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
+                    waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
                     logging.warning("Class cannot be booked %s", e)

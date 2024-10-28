@@ -1,4 +1,5 @@
 import logging
+import string
 import os
 from enum import Enum
 from abc import abstractmethod, ABC
@@ -11,55 +12,23 @@ from .constants import DAYS_OF_WEEK
 
 _queue = Queue()
 
-_SENDER = "WodBooker <wodbooker@xavimiranda.es>"
-_MAIL = "xmfreak@gmail.com"
+_SENDER = "WodBooker <wodbooker@example.es>"
+_MAIL = "example@gmail.com"
 _PASSWORD = os.getenv('EMAIL_PASSWORD')
-_HOST = "home.xavimiranda.es"
+_HOST = "home.example.es"
 
-_ERROR_HTML_TEMPLATE = """<html>
+_HTML_TEMPLATE = """<html>
     <head></head>
     <body>
-        <h3>WodBooker - Error en la reserva del {1} a las {2}:</h3>
-        <p>{3}</a>.</p>
-        <p style="font-size: small">Box: <a href="{4}">{4}</a></p>
+        <h3>WodBooker - {1}:</h3>
+        <p>{2}</p>
+        <p style="font-size: small">Box: <a href="{3}">{3}</a>
+        Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{4}">aquí</a>.</p>
+        <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
+        Gestiona tus preferencias de notificaciones <a href="https://{0}/user/">aquí</a>.
+        </p>
     </body>
 </html>"""
-
-_SUCCESS_HTML_TEMPLATE = """<html>
-    <head></head>
-    <body>
-        <h3>WodBooker - Reservada con éxito la clase del {1} a las {2}:</h3>
-        <p>{3}</a></p>
-        <p style="font-size: small">Box: <a href="{4}">{4}</a></p>
-    </body>
-</html>"""
-
-# _ERROR_HTML_TEMPLATE = """<html>
-#     <head></head>
-#     <body>
-#         <h3>WodBooker - Error en la reserva del {1} a las {2}:</h3>
-#         <p>{3}</a>.</p>
-#         <p style="font-size: small">Box: <a href="{4}">{4}</a>
-#         Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
-#         <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
-#         Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
-#         </p>
-#     </body>
-# </html>"""
-
-# _SUCCESS_HTML_TEMPLATE = """<html>
-#     <head></head>
-#     <body>
-#         <h3>WodBooker - Reservada con éxito la clase del {1} a las {2}:</h3>
-#         <p>{3}</a></p>
-#         <p style="font-size: small">Box: <a href="{4}">{4}</a>
-#         Puedes consultar todos los eventos asociados a esta reserva <a href="https://{0}/event/?search=%3D{5}">aquí</a>.</p>
-#         <p style="font-size: small">Mensaje automático generado por <a href="https://{0}">WodBooker</a>.
-#         Gestiona tus preferenias de notificaciones <a href="https://{0}/user/">aquí</a>.
-#         </p>
-#     </body>
-# </html>"""
-
 
 class EmailPermissions(Enum):
     FAILURE = "mail_permission_failure"
@@ -106,17 +75,18 @@ class ErrorEmail(Email):
     def __init__(self, booking, subject, error):
         super().__init__(subject)
         self.booking = booking
-        self.error = error
+        self.error = error if error[-1] in string.punctuation else error + "."
         self.subject = subject
 
     def required_permission(self):
         return EmailPermissions.FAILURE
 
     def get_html(self):
-        return _ERROR_HTML_TEMPLATE.format(_HOST, DAYS_OF_WEEK[self.booking.dow],
-                                           self.booking.time.strftime("%H:%M:%S"),
-                                           self.error, self.booking.url,
-                                           self.booking.id)
+        title = f"Error en la reserva del " \
+                f"{DAYS_OF_WEEK[self.booking.dow]} a las " \
+                f"{self.booking.time.strftime('%H:%M')}"
+        return _HTML_TEMPLATE.format(_HOST, title, self.error, self.booking.url,
+                                     self.booking.id)
 
     def get_plain_body(self):
         return self.error
@@ -129,16 +99,17 @@ class SuccessEmail(Email):
     def __init__(self, booking, subject, message):
         super().__init__(subject)
         self.booking = booking
-        self.message = message
+        self.message = message if message[-1] in string.punctuation else message + "."
 
     def required_permission(self):
         return EmailPermissions.SUCCESS
 
     def get_html(self):
-        return _SUCCESS_HTML_TEMPLATE.format(_HOST, DAYS_OF_WEEK[self.booking.dow],
-                                             self.booking.time.strftime("%H:%M:%S"),
-                                             self.message, self.booking.url,
-                                             self.booking.id)
+        title = f"Reservada con éxito la clase del " \
+                f"{DAYS_OF_WEEK[self.booking.dow]} a las " \
+                f"{self.booking.time.strftime('%H:%M')}"
+        return _HTML_TEMPLATE.format(_HOST, title, self.message, self.booking.url,
+                                     self.booking.id)
 
     def get_plain_body(self):
         return self.message
