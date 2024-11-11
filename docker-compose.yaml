@@ -1,16 +1,31 @@
-version: '3'
-
 services:
-   nginx:
-      build: ./nginx/
-      image: nginx-wodbooker
-      volumes:
-         - ./nginx:/etc/nginx/conf.d
-      ports:
-         - "80:80"
+  wodbooker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wodbooker
+    restart: always
+    ports:
+      - "5100:5000"
+    environment:
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+    volumes:
+      - .:/app
+    networks:
+      - wodbooker-network
 
-   wodbooker:
-      build: .
-      image: wodbooker
-      expose:
-         - "5000"
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: nginx-wodbooker
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - wodbooker-network
+
+networks:
+  wodbooker-network:
+    driver: bridge
