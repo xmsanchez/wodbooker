@@ -57,7 +57,7 @@ class Scraper():
         if self._cookie:
             self._session.cookies.update(pickle.loads(self._cookie))
             road_to_box_request = self._session.get("https://wodbuster.com/account/roadtobox.aspx",
-                                                    headers=_HEADERS, allow_redirects=False, timeout=10)
+                                                    headers=_HEADERS, allow_redirects=True, timeout=10)
 
             if "Location" in road_to_box_request.headers and "login" in road_to_box_request.headers["Location"]:
                 logging.warning("Cookie for user %s is outdated. Attempting logging with password...", self._user)
@@ -76,8 +76,6 @@ class Scraper():
         self._session = cloudscraper.create_scraper()
         login_url = "https://wodbuster.com/account/login.aspx"
         initial_request = self._session.get(login_url, headers=_HEADERS, timeout=10)
-
-        logging.info(str(initial_request.content))
 
         try:
             soup = BeautifulSoup(initial_request.content, 'lxml')
@@ -232,7 +230,7 @@ class Scraper():
 
     def _book_request(self, url):
         try:
-            request = self._session.get(url, headers=_HEADERS, allow_redirects=False, timeout=10)
+            request = self._session.get(url, headers=_HEADERS, allow_redirects=True, timeout=10)
             if request.status_code == 302 and "login" in request.headers["Location"]:
                 raise InvalidBox("Provided URL is not accesible for the given user")
             if request.status_code != 200:
@@ -266,7 +264,7 @@ class Scraper():
 
         if url not in self._box_name_by_url:
             homepage_request = self._session.get(f"{url}/user/", headers=_HEADERS,
-                                                 allow_redirects=False, timeout=10)
+                                                 allow_redirects=True, timeout=10)
             look_up = re.search(r"InitAjax\('([^']*)',\s?'([^']*)'", homepage_request.text)
             if not look_up:
                 raise InvalidBox("Couldn't determine box name from URL")
@@ -333,7 +331,7 @@ class Scraper():
         """
         self.login()
         road_to_box_request = self._session.get("https://wodbuster.com/account/roadtobox.aspx",
-                                                headers=_HEADERS, allow_redirects=False, timeout=10)
+                                                headers=_HEADERS, allow_redirects=True, timeout=10)
         if "Location" in road_to_box_request.headers:
             if "login" in road_to_box_request.headers["Location"]:
                 raise LoginError("Invalid credentials")
