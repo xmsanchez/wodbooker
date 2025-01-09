@@ -5,15 +5,24 @@ import logging
 import json
 import requests
 import sseclient
-import cloudscraper
 import pytz
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium import webdriver
+import time
 from .exceptions import LoginError, InvalidWodBusterResponse, \
     BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization
 
 _HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.3"
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
 }
 
 _UTC_TZ = pytz.timezone('UTC')
@@ -31,7 +40,8 @@ class Scraper():
         self._user = user
         self._password = password
         self.logged = False
-        self._session = cloudscraper.create_scraper()
+        self._session = requests.Session()
+        self._browser = None
         self._cookie = cookie
         self._box_name_by_url = {}
         self._sse_server_by_url = {}
@@ -73,58 +83,159 @@ class Scraper():
         if not self._password:
             raise PasswordRequired("Password is required")
 
-        self._session = cloudscraper.create_scraper()
-        login_url = "https://wodbuster.com/account/login.aspx"
-        initial_request = self._session.get(login_url, headers=_HEADERS, timeout=10)
-
-        logging.info(str(initial_request.content))
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920x1080")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.3")
+        self._browser = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        
+        self._browser.get("https://wodbuster.com/account/login.aspx")
+        time.sleep(3)  # Wait for the page to load
 
         try:
-            soup = BeautifulSoup(initial_request.content, 'lxml')
-            viewstatec = soup.find(id='__VIEWSTATEC')['value']
-            eventvalidation = soup.find(id='__EVENTVALIDATION')['value']
-            csrftoken = soup.find(id='CSRFToken')['value']
-        except TypeError as e:
-            logging.exception("WodBuster response cannot be parsed")
-            raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE) from e
+            # Wait for the email input field to be present
+            email_field = WebDriverWait(self._browser, 10).until(
+                EC.presence_of_element_located((By.NAME, "ctl00$ctl00$body$body$CtlLogin$IoEmail"))
+            )
+            email_field.send_keys(self._user)
 
-        data_login = {
-            'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlLogin$CtlAceptar',
-            'ctl00$ctl00$body$body$CtlLogin$IoTri': '',
-            'ctl00$ctl00$body$body$CtlLogin$IoTrg': '',
-            'ctl00$ctl00$body$body$CtlLogin$IoTra': '',
-            'ctl00$ctl00$body$body$CtlLogin$IoEmail': self._user,
-            'ctl00$ctl00$body$body$CtlLogin$IoPassword': self._password,
-            'ctl00$ctl00$body$body$CtlLogin$cIoUid': '',
-            'ctl00$ctl00$body$body$CtlLogin$CtlAceptar': 'Aceptar\n'
-        }
+            # Wait for the password input field to be present
+            password_field = WebDriverWait(self._browser, 10).until(
+                EC.presence_of_element_located((By.NAME, "ctl00$ctl00$body$body$CtlLogin$IoPassword"))
+            )
+            password_field.send_keys(self._password)
 
-        login_request = self._login_request(login_url, viewstatec, eventvalidation, csrftoken, data_login)
+            # Wait for the login button to be clickable and click it
+            login_button = WebDriverWait(self._browser, 10).until(
+                EC.element_to_be_clickable((By.NAME, "ctl00$ctl00$body$body$CtlLogin$CtlAceptar"))
+            )
+            login_button.click()
 
-        if login_request.status_code != 200:
-            raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
+            # Wait for the necessary elements and extract tokens
+            viewstatec = WebDriverWait(self._browser, 20).until(
+                EC.presence_of_element_located((By.ID, "__VIEWSTATEC"))
+            ).get_attribute('value')
 
-        if 'class="Warning"' in login_request.text:
-            raise LoginError('Invalid credentials')
+            eventvalidation = self._browser.find_element(By.ID, "__EVENTVALIDATION").get_attribute('value')
+            csrftoken = self._browser.find_element(By.ID, "CSRFToken").get_attribute('value')
 
-        viewstatec_confirm = self._lookup_header_value(login_request.text, '__VIEWSTATEC')
-        eventvalidation_confirm = self._lookup_header_value(login_request.text, '__EVENTVALIDATION')
+            # remember_button = WebDriverWait(self._browser, 10).until(
+            #     EC.presence_of_element_located((By.NAME, "ctl00$ctl00$body$body$CtlConfiar$CtlSeguro"))
+            # )
+            # remember_button.click()
 
+            # # Additional wait for the page to load after login
+            # WebDriverWait(self._browser, 10).until(
+            #     EC.presence_of_element_located((By.CLASS_NAME, "mainTitle"))
+            # )
+
+
+        except Exception as e:
+            logging.error(f"Error during login: {e}")
+            raise
+
+        # Parse the page source with Beautiful Soup
+        soup = BeautifulSoup(self._browser.page_source, 'lxml')
+        
+        # Retrieve required tokens using Beautiful Soup
+        login_url = "https://wodbuster.com/account/login.aspx"
         data_confirm = {
             'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlConfiar$CtlSeguro',
             'ctl00$ctl00$body$body$CtlConfiar$CtlSeguro': 'Recordar\n'
         }
 
-        confirm_login_request = self._login_request(login_url, viewstatec_confirm,
-                                                    eventvalidation_confirm, csrftoken,
-                                                    data_confirm)
+        logging.info(f'viewstatec: {viewstatec}')
+        logging.info(f'eventvalidation: {eventvalidation}')
+        logging.info(f'csrftoken: {csrftoken}')
 
-        if confirm_login_request.status_code != 200:
-            raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
+        confirm_login_request = self._login_request(login_url, viewstatec, eventvalidation, csrftoken, data_confirm)
+
+        self._cookie = pickle.dumps(self._browser.get_cookies())
+        # # Retrieve the session using beautifulSoup and the retrieved cookie
+        # self._session.cookies.update(pickle.loads(self._cookie))
+        
+        # if login_request.status_code != 200:
+        #     raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
+
+        # if 'class="Warning"' in login_request.text:
+        #     raise LoginError('Invalid credentials')
+
+        # viewstatec_confirm = self._lookup_header_value(login_request.text, '__VIEWSTATEC')
+        # eventvalidation_confirm = self._lookup_header_value(login_request.text, '__EVENTVALIDATION')
+
+        # data_confirm = {
+        #     'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlConfiar$CtlSeguro',
+        #     'ctl00$ctl00$body$body$CtlConfiar$CtlSeguro': 'Recordar\n'
+        # }
+
+        # confirm_login_request = self._login_request(login_url, viewstatec_confirm,
+        #                                             eventvalidation_confirm, csrftoken,
+        #                                             data_confirm)
+
+        # if confirm_login_request.status_code != 200:
+        #     raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
 
         logging.info("User %s logged successfully with credentials", self._user)
         self.logged = True
         self._password = None
+
+    # def _login_with_username_and_password(self):
+
+    #     if not self._password:
+    #         raise PasswordRequired("Password is required")
+
+    #     self._session = requests.Session()
+    #     login_url = "https://wodbuster.com/account/login.aspx"
+    #     initial_request = self._session.get(login_url, headers=_HEADERS, timeout=10)
+
+    #     try:
+    #         soup = BeautifulSoup(initial_request.content, 'lxml')
+    #         viewstatec = soup.find(id='__VIEWSTATEC')['value']
+    #         eventvalidation = soup.find(id='__EVENTVALIDATION')['value']
+    #         csrftoken = soup.find(id='CSRFToken')['value']
+    #     except TypeError as e:
+    #         logging.exception("WodBuster response cannot be parsed")
+    #         raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE) from e
+
+    #     data_login = {
+    #         'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlLogin$CtlAceptar',
+    #         'ctl00$ctl00$body$body$CtlLogin$IoTri': '',
+    #         'ctl00$ctl00$body$body$CtlLogin$IoTrg': '',
+    #         'ctl00$ctl00$body$body$CtlLogin$IoTra': '',
+    #         'ctl00$ctl00$body$body$CtlLogin$IoEmail': self._user,
+    #         'ctl00$ctl00$body$body$CtlLogin$IoPassword': self._password,
+    #         'ctl00$ctl00$body$body$CtlLogin$cIoUid': '',
+    #         'ctl00$ctl00$body$body$CtlLogin$CtlAceptar': 'Aceptar\n'
+    #     }
+
+    #     login_request = self._login_request(login_url, viewstatec, eventvalidation, csrftoken, data_login)
+
+    #     if login_request.status_code != 200:
+    #         raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
+
+    #     if 'class="Warning"' in login_request.text:
+    #         raise LoginError('Invalid credentials')
+
+    #     viewstatec_confirm = self._lookup_header_value(login_request.text, '__VIEWSTATEC')
+    #     eventvalidation_confirm = self._lookup_header_value(login_request.text, '__EVENTVALIDATION')
+
+    #     data_confirm = {
+    #         'ctl00$ctl00$body$ctl00': 'ctl00$ctl00$body$ctl00|ctl00$ctl00$body$body$CtlConfiar$CtlSeguro',
+    #         'ctl00$ctl00$body$body$CtlConfiar$CtlSeguro': 'Recordar\n'
+    #     }
+
+    #     confirm_login_request = self._login_request(login_url, viewstatec_confirm,
+    #                                                 eventvalidation_confirm, csrftoken,
+    #                                                 data_confirm)
+
+    #     if confirm_login_request.status_code != 200:
+    #         raise InvalidWodBusterResponse(_WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE)
+
+    #     self.logged = True
+
 
     def _login_request(self, url, viewstatec, eventvalidation, csrftoken, extra_fields):
         data = {
@@ -236,6 +347,7 @@ class Scraper():
             if request.status_code == 302 and "login" in request.headers["Location"]:
                 raise InvalidBox("Provided URL is not accesible for the given user")
             if request.status_code != 200:
+                print(f'Error in request. Status code: {request.status_code}')
                 raise InvalidWodBusterResponse('Invalid response status from WodBuster')
 
             return request.json()
@@ -376,3 +488,4 @@ def refresh_scraper(email: str, password: str) -> Scraper:
     scraper.login()
     __SCRAPERS[email] = scraper
     return scraper
+

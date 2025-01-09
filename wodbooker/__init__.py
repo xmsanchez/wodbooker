@@ -6,6 +6,7 @@ import threading
 import subprocess
 import pickle
 import requests
+import cloudscraper
 import logging
 from flask import Flask, redirect, request, session, g
 
@@ -82,7 +83,7 @@ def check_session_expired():
         if login.current_user.force_login:
             login.logout_user()
         else:
-            _session = requests.Session()
+            _session = cloudscraper.create_scraper()
             _session.cookies.update(pickle.loads(login.current_user.cookie))
             try:
                 expiration_timestamp = next(x for x in _session.cookies if x.name == '.WBAuth').expires

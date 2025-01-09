@@ -3,6 +3,7 @@ from datetime import datetime
 from collections import defaultdict
 import pickle
 import requests
+import cloudscraper
 from flask import redirect, url_for, request, flash
 from wtforms import form, fields, validators
 from flask_admin.form.fields import TimeField
@@ -359,7 +360,7 @@ class UserView(sqla.ModelView):
 
 
 def _get_cookie_expiration_date(cookie):
-    session = requests.Session()
+    session = cloudscraper.create_scraper()
     session.cookies.update(pickle.loads(cookie))
     try:
         expiration_timestamp = next(x for x in session.cookies if x.name == '.WBAuth').expires
