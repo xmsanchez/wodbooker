@@ -21,7 +21,10 @@ from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
-_MAX_ERRORS = 5
+# Increase the max errors, this is to prevent bookings
+# from not succeeding when there is a penalization
+# I know it's a weird workaround :-)
+_MAX_ERRORS = 50
 
 __CURRENT_THREADS = {
 }
@@ -94,6 +97,13 @@ class Booker(StoppableThread):
 
                     if waiter and datetime_to_book != _datetime_to_book:
                         logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
+
+                        # Add another sleep here in case we are trying to make multiple books due to previous penalizations
+                        sleep = random.randint(1, 100)/100
+                        logging.info("Sleeping for %s seconds", sleep)
+                        pause.seconds(sleep)
+
+                        # Continue after the sleep
                         event = Event(booking_id=self._booking.id,
                                       event=EventMessage.CLASS_WAITING_OVER % (datetime_to_book.strftime('%d/%m/%Y'), _datetime_to_book.strftime('%d/%m/%Y')))
                         _add_event(event)
