@@ -23,8 +23,8 @@
           </div>
           <div class="card-body p-4">
             <form method="POST" action="" class="form">
-              {{ form.hidden_tag() if form.hidden_tag }}
-              {% for f in form if f.type != 'CSRFTokenField' %}
+          {{ form.hidden_tag() if form.hidden_tag }}
+          {% for f in form if f.type != 'CSRFTokenField' %}
               <div class="form-group mb-3">
                 {{ f.label(class="form-label fw-medium text-secondary") }}
                 {% if f.type == 'PasswordField' %}
@@ -44,24 +44,24 @@
                 {% else %}
                   {{ f(class='form-control form-control-lg') }}
                 {% endif %}
-                {% if f.errors %}
+          {% if f.errors %}
                 <div class="invalid-feedback d-block">
-                  {% for e in f.errors %}
+            {% for e in f.errors %}
                   <small class="text-danger">
                     <i class="bi bi-exclamation-triangle me-1"></i>{{ e }}
                   </small>
-                  {% endfor %}
+            {% endfor %}
                 </div>
-                {% endif %}
-              </div>
-              {% endfor %}
+          {% endif %}
+          </div>
+          {% endfor %}
               <div class="d-grid gap-2 mt-4">
                 <button class="btn btn-primary btn-lg fw-medium" type="submit">
                   <i class="bi bi-box-arrow-in-right me-2"></i>
                   Iniciar Sesión
                 </button>
               </div>
-            </form>
+        </form>
           </div>
         </div>
         <div class="text-center mt-3">
