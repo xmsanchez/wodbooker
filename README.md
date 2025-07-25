@@ -42,13 +42,36 @@ gcloud run deploy wodbooker \
     --quiet
 ```
 
-## Running locally (raspberry pi)
+## Running locally (Linux)
 
 ### Requirements
 
 Install docker
 
 ### Setup
+
+The easiest way to run the project is using docker compose. So go ahead:
+
+```bash
+docker compose up -d --build
+```
+
+Once the build finishes the containers should be up & running.
+
+The application will be accessible at:
+
+- 127.0.0.1:5100
+- 127.0.0.1:80
+- 127.0.0.1:443
+
+To access from outside your local network you'll need to open two ports:
+
+- Open the 443 port in your router and forward it to `127.0.0.1:443`.
+- Open the 80 port in your router and forward it to `127.0.0.1:80`. This will be used for letsencrypt to renew the certificate.
+
+For the letsencrypt configuration see the last section of this README.
+
+### Setup (legacy)
 
 Build images, create docker network
 
@@ -63,4 +86,26 @@ Run containers:
 ```bash
 docker run --rm -p 5001:5001 --network=net -e EMAIL_PASSWORD=${EMAIL_PASSWORD} -v $(pwd):/app --name wodbooker wodbooker
 docker run --rm --name nginx-wodbooker  --network=net -p 80:80 nginx-wodbooker
+```
+
+## SSL certificate for nginx
+
+The first time we run wodbooker nginx container we need to run this:
+
+```bash
+/usr/bin/docker exec -ti nginx-wodbooker certbot --nginx -d wodbooker.yourdomain.com
+```
+
+The above command will deploy the letsencrypt certificate for the first time.
+
+From then on, the certificate only needs to be renewed every three months. This can be automated in crontab:
+
+```bash
+crontab -e
+```
+
+Add this line:
+
+```bash
+0 0 * * * /usr/bin/docker exec -ti nginx-wodbooker certbot renew --quiet
 ```
