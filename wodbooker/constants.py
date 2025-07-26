@@ -2,6 +2,18 @@ from enum import StrEnum
 
 DAYS_OF_WEEK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
+# Default offset values for each day of the week (0=Monday, 6=Sunday)
+# Updated with correct values: Saturday=7, Sunday=1, Monday=2, etc.
+DEFAULT_OFFSETS_BY_DAY = {
+    0: 2,  # Monday: 2 days in advance
+    1: 3,  # Tuesday: 3 days in advance  
+    2: 4,  # Wednesday: 4 days in advance
+    3: 5,  # Thursday: 5 days in advance
+    4: 6,  # Friday: 6 days in advance
+    5: 7,  # Saturday: 7 days in advance
+    6: 1,  # Sunday: 1 day in advance
+}
+
 UNEXPECTED_ERROR_MAIL_SUBJECT = "Error en la reserva"
 UNEXPECTED_ERROR_MAIL_BODY = "En este momento es imposible gestionar tu reserva por un error inesperado. Te recomendamos acceder a WodBuster y hacer la reserva manualmente"
 FULL_CLASS_BOOKED_MAIL_SUBJECT = "Clase reservada"

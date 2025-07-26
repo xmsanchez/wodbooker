@@ -20,7 +20,7 @@ from .models import User, db, Booking
 from .booker import start_booking_loop, stop_booking_loop, is_booking_running
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
-from .constants import EventMessage, DAYS_OF_WEEK
+from .constants import EventMessage, DAYS_OF_WEEK, DEFAULT_OFFSETS_BY_DAY
 
 _MAX_BOOKINGS_BY_USER = 10
 
@@ -104,18 +104,52 @@ class MyAdminIndexView(AdminIndexView):
         return redirect(url_for('.index'))
 
 
+class OffsetField(fields.IntegerField):
+    """Custom field that sets default offset based on selected day of week"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.description = "Dejar en 0 para reservar el mismo día. Número de días antes de la clase cuando se abre la reserva."
+    
+    def process_formdata(self, valuelist):
+        super().process_formdata(valuelist)
+        # If no value provided, use default based on day of week
+        if not self.data and hasattr(self, '_dow_field'):
+            self.data = DEFAULT_OFFSETS_BY_DAY.get(self._dow_field.data, 0)
+    
+    def set_dow_field(self, dow_field):
+        """Set reference to day of week field for dynamic default calculation"""
+        self._dow_field = dow_field
+
+
 class BookingForm(form.Form):
 
-    dow = fields.SelectField('Día de la semana', choices=[(0, 'Lunes'), (1, 'Martes'), (
+    dow = fields.SelectField('Día de la semana a reservar', choices=[(0, 'Lunes'), (1, 'Martes'), (
         2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')])
-
-    time = TimeField('Hora', validators=[validators.DataRequired()])
+    time = TimeField('Hora a reservar', validators=[validators.DataRequired()])
     url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)', validators=[validators.DataRequired()])
-    offset = fields.IntegerField('Días de antelación para reservar', validators=[validators.DataRequired()])
+    booking_open_day = fields.SelectField(
+        'Día de apertura de reservas',
+        choices=[(0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')],
+        default=5
+    )
     available_at = TimeField('Hora de apertura de reservas', validators=[validators.DataRequired()])
     type_class = fields.SelectField('Tipo de clase a reservar (wod, openbox)', choices=[(0, 'wod'), (1, 'openbox')], 
                                     validators=[validators.DataRequired()], 
                                     description="Algunos días puede haber simultáneamente wod y openbox. Selecciona aquí el tipo de clase que deseas reservar.")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Calculate offset based on dow and booking_open_day
+        try:
+            class_day = int(self.dow.data) if self.dow.data is not None else 5
+            open_day = int(self.booking_open_day.data) if self.booking_open_day.data is not None else 5
+            offset = (class_day - open_day) % 7
+            if offset == 0:
+                offset = 7
+            self.offset = offset
+        except Exception:
+            self.offset = 7  # fallback
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(
@@ -212,6 +246,7 @@ class BookingAdmin(sqla.ModelView):
             return False
 
         stop_booking_loop(model)
+        model.offset = form.offset  # Set calculated offset
         returned_value = super().update_model(form, model)
         if model.is_active:
             start_booking_loop(model)
@@ -236,6 +271,7 @@ class BookingAdmin(sqla.ModelView):
 
         booking = super().create_model(form)
         booking.user = login.current_user
+        booking.offset = form.offset  # Set calculated offset
         db.session.flush()
         db.session.commit()
         if booking.is_active:
@@ -248,7 +284,7 @@ class BookingAdmin(sqla.ModelView):
             last_booking = db.session.query(Booking).filter_by(user=login.current_user).order_by(Booking.id.desc()).first()
             if last_booking:
                 form.url.data = form.url.data or last_booking.url
-                form.offset.data = form.offset.data or last_booking.offset
+                form.offset = last_booking.offset # Use the calculated offset
                 form.available_at.data = form.available_at.data or last_booking.available_at
                 form.type_class.data = form.type_class.data or last_booking.type_class
             else:
@@ -257,6 +293,10 @@ class BookingAdmin(sqla.ModelView):
                     form.url.data = form.url.data or scraper.get_box_url()
                 except (PasswordRequired, LoginError, InvalidWodBusterResponse, RequestException) as e:
                     logging.warning("Exception while loading BOX URL %s", e)
+        
+        # Set default offset based on selected day of week if not already set
+        if form.dow.data is not None and form.offset is None: # Use form.offset
+            form.offset = DEFAULT_OFFSETS_BY_DAY.get(form.dow.data, 0)
 
         return form
 

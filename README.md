@@ -9,8 +9,22 @@ Once logged in, users are allowed to create booking requests. To do so, they are
 * Day of week: The day of the week the booking is intended to.
 * Hour: The hour of the day the booking is intented to.
 * WodBuster box URL: Every box has a different WodBuster URL. Users are required to introduce the one specific to their box. This is required for users with access to multiple boxes.
-* Days in advance: The number of days in advance with which the class can be booked.
+* Days in advance: The number of days in advance with which the class can be booked. This field is now optional and has smart defaults based on the day of the week.
 * Booking opening hour: The time of the day when the first booking attempt should be executed. 
+
+## Days in Advance (Offset) Feature
+
+The "Days in advance" field has been enhanced with smart defaults:
+
+- **Saturday**: 0 days (same day booking)
+- **Friday**: 1 day in advance
+- **Thursday**: 2 days in advance
+- **Wednesday**: 3 days in advance
+- **Tuesday**: 4 days in advance
+- **Monday**: 5 days in advance
+- **Sunday**: 6 days in advance
+
+The offset field is now optional and will automatically suggest the appropriate value based on the selected day of the week. Users can still customize this value if needed.
 
 Once the request is created, a thread will take care of it by:
 
