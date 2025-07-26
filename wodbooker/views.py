@@ -124,16 +124,15 @@ class OffsetField(fields.IntegerField):
 
 class BookingForm(form.Form):
 
-    dow = fields.SelectField('Día de la semana', choices=[(0, 'Lunes'), (1, 'Martes'), (
+    dow = fields.SelectField('Día de la semana a reservar', choices=[(0, 'Lunes'), (1, 'Martes'), (
         2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')])
-
+    time = TimeField('Hora a reservar', validators=[validators.DataRequired()])
+    url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)', validators=[validators.DataRequired()])
     booking_open_day = fields.SelectField(
         'Día de apertura de reservas',
         choices=[(0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')],
         default=5
     )
-    time = TimeField('Hora', validators=[validators.DataRequired()])
-    url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)', validators=[validators.DataRequired()])
     available_at = TimeField('Hora de apertura de reservas', validators=[validators.DataRequired()])
     type_class = fields.SelectField('Tipo de clase a reservar (wod, openbox)', choices=[(0, 'wod'), (1, 'openbox')], 
                                     validators=[validators.DataRequired()], 
