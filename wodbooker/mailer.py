@@ -12,10 +12,10 @@ from .constants import DAYS_OF_WEEK
 
 _queue = Queue()
 
-_SENDER = "WodBooker <wodbooker@example.es>"
-_MAIL = "example@gmail.com"
+_SENDER = os.getenv('EMAIL_SENDER', 'WodBooker <wodbooker@example.es>')
+_MAIL = os.getenv('EMAIL_USER', 'wodbooker@example.es')
 _PASSWORD = os.getenv('EMAIL_PASSWORD')
-_HOST = "home.example.es"
+_HOST = os.getenv('EMAIL_HOST', 'home.example.es')
 
 _HTML_TEMPLATE = """<html>
     <head></head>

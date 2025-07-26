@@ -8,7 +8,10 @@ services:
     ports:
       - "5100:5000"
     environment:
+      - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_SENDER=${EMAIL_SENDER}
+      - EMAIL_HOST=${EMAIL_HOST}
     volumes:
       - .:/app
     networks:

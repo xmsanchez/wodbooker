@@ -84,7 +84,11 @@ docker build -t wodbooker .
 Run containers:
 
 ```bash
-docker run --rm -p 5001:5001 --network=net -e EMAIL_PASSWORD=${EMAIL_PASSWORD} -v $(pwd):/app --name wodbooker wodbooker
+docker run --rm -p 5100:5000 --network=net \
+    -e EMAIL_PASSWORD=${EMAIL_PASSWORD} \
+    -e EMAIL_USER=${EMAIL_USER} \
+    -e EMAIL_SENDER=${EMAIL_SENDER} \
+    -v $(pwd):/app --name wodbooker wodbooker
 docker run --rm --name nginx-wodbooker  --network=net -p 80:80 nginx-wodbooker
 ```
 
