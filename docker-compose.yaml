@@ -25,6 +25,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx:/etc/nginx
+      - ./nginx/letsencrypt:/etc/letsencrypt
     networks:
       - wodbooker-network
 
