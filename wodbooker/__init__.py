@@ -48,13 +48,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
     app.config['DATABASE_FILE'] + '?check_same_thread=False'
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# Configure connection pool to handle concurrent connections
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_size': 20,
-    'pool_timeout': 60,
-    'pool_recycle': 3600,
-    'max_overflow': 30
-}
 app.config['CSRF_ENABLED'] = True
 app.config['RECAPTCHA_PUBLIC_KEY'] = os.environ.get('RECAPTCHA_PUBLIC_KEY')
 app.config['RECAPTCHA_PRIVATE_KEY'] = os.environ.get('RECAPTCHA_PRIVATE_KEY')
@@ -90,16 +83,15 @@ def check_session_expired():
         if login.current_user.force_login:
             login.logout_user()
         else:
+            _session = cloudscraper.create_scraper()
+            _session.cookies.update(pickle.loads(login.current_user.cookie))
             try:
-                _session = cloudscraper.create_scraper()
-                _session.cookies.update(pickle.loads(login.current_user.cookie))
                 expiration_timestamp = next(x for x in _session.cookies if x.name == '.WBAuth').expires
                 expiration_date = datetime.fromtimestamp(expiration_timestamp)
                 if datetime.now() > expiration_date:
                     login.logout_user()
-            except (StopIteration, TypeError, Exception) as e:
+            except (StopIteration, TypeError):
                 logging.exception("Error while getting expiration date of cookie")
-                # Don't logout on error, just log it
 
 
 @app.before_request
@@ -118,15 +110,6 @@ def redirect_admin():
     """
     if request.path.startswith('/admin'):
         return redirect(request.full_path.replace('/admin', ''))
-
-
-@app.teardown_request
-def teardown_request(exception=None):
-    """
-    Ensure database session is closed after each request
-    """
-    db.session.remove()
-
 
 _init_login()
 
@@ -149,25 +132,18 @@ with app.app_context():
 # Start events cleaning loop
 def _cleaning_loop(app_context):
     app_context.push()
-    while True:
-        try:
-            with app_context:
-                logging.info("Cleaning events older than 15 days")
-                bookings = db.session.query(Booking).all()
-                for booking in bookings:
-                    events_older_than_15_days = list(filter(lambda x: x.date < datetime.now() - timedelta(days=15),
-                                                            booking.events[:-1]))
-                    events_older_than_15_days = sorted(events_older_than_15_days, key=lambda x: x.date)
-                    for event in events_older_than_15_days:
-                        db.session.delete(event)
-                db.session.commit()
-        except Exception as e:
-            logging.error(f"Error in cleaning loop: {e}")
-            db.session.rollback()
-        finally:
-            # Ensure session is closed
-            db.session.close()
-        time.sleep(60 * 60 * 24)
+    with app_context:
+        while True:
+            logging.info("Cleaning events older than 15 days")
+            bookings = db.session.query(Booking).all()
+            for booking in bookings:
+                events_older_than_15_days = list(filter(lambda x: x.date < datetime.now() - timedelta(days=15),
+                                                        booking.events[:-1]))
+                events_older_than_15_days = sorted(events_older_than_15_days, key=lambda x: x.date)
+                for event in events_older_than_15_days:
+                    db.session.delete(event)
+            db.session.commit()
+            time.sleep(60 * 60 * 24)
 
 thread_cleaner = threading.Thread(target=_cleaning_loop,
                                   args=(app.app_context(),),
