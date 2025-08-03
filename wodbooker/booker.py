@@ -4,6 +4,7 @@ import random
 import logging
 import pause
 import pytz
+import os
 from flask import current_app as app
 from func_timeout import StoppableThread
 from requests.exceptions import RequestException
@@ -20,6 +21,11 @@ from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
 from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
+
+# Priority users list - users in this list will have precedence over others
+# Priority users are read from environment variable PRIORITY_USERS_EMAILS
+# Emails should be separated by spaces
+PRIORITY_USERS = os.environ.get('PRIORITY_USERS_EMAILS', '').split()
 
 # Increase the max errors, this is to prevent bookings
 # from not succeeding when there is a penalization
@@ -129,6 +135,13 @@ class Booker(StoppableThread):
                     if waiter:
                         waiter.wait()
                     waiter = None
+
+                    # Check if user has priority - non-priority users wait 1 second
+                    if self._booking.user.email not in PRIORITY_USERS:
+                        logging.info("User %s is not in priority list, waiting 1 second before booking", self._booking.user.email)
+                        pause.seconds(1)
+                    else:
+                        logging.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
 
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
