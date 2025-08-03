@@ -20,6 +20,9 @@ services:
       dockerfile: Dockerfile
     container_name: nginx-wodbooker
     restart: always
+    volumes:
+      - ./nginx:/etc/nginx
+      - ./nginx/letsencrypt:/etc/letsencrypt
     ports:
       - "80:80"
       - "443:443"
