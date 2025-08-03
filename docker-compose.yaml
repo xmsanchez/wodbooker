@@ -9,6 +9,7 @@ services:
       - "5100:5000"
     environment:
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - PRIORITY_USERS_EMAILS=${PRIORITY_USERS_EMAILS}
     volumes:
       - .:/app
     networks:

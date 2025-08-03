@@ -25,7 +25,7 @@ _MADRID_TZ = pytz.timezone('Europe/Madrid')
 # Priority users list - users in this list will have precedence over others
 # Priority users are read from environment variable PRIORITY_USERS_EMAILS
 # Emails should be separated by spaces
-PRIORITY_USERS = os.environ.get('PRIORITY_USERS_EMAILS', '').split()
+PRIORITY_USERS = os.getenv('PRIORITY_USERS_EMAILS', '').split()
 
 # Increase the max errors, this is to prevent bookings
 # from not succeeding when there is a penalization
