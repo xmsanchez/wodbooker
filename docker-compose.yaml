@@ -10,12 +10,9 @@ services:
     environment:
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
-<<<<<<< HEAD
       - EMAIL_SENDER=${EMAIL_SENDER}
       - EMAIL_HOST=${EMAIL_HOST}
-=======
       - PRIORITY_USERS_EMAILS=${PRIORITY_USERS_EMAILS}
->>>>>>> 412029a (fix)
     volumes:
       - .:/app
     networks:
