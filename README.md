@@ -9,8 +9,22 @@ Once logged in, users are allowed to create booking requests. To do so, they are
 * Day of week: The day of the week the booking is intended to.
 * Hour: The hour of the day the booking is intented to.
 * WodBuster box URL: Every box has a different WodBuster URL. Users are required to introduce the one specific to their box. This is required for users with access to multiple boxes.
-* Days in advance: The number of days in advance with which the class can be booked.
+* Days in advance: The number of days in advance with which the class can be booked. This field is now optional and has smart defaults based on the day of the week.
 * Booking opening hour: The time of the day when the first booking attempt should be executed. 
+
+## Days in Advance (Offset) Feature
+
+The "Days in advance" field has been enhanced with smart defaults:
+
+- **Saturday**: 0 days (same day booking)
+- **Friday**: 1 day in advance
+- **Thursday**: 2 days in advance
+- **Wednesday**: 3 days in advance
+- **Tuesday**: 4 days in advance
+- **Monday**: 5 days in advance
+- **Sunday**: 6 days in advance
+
+The offset field is now optional and will automatically suggest the appropriate value based on the selected day of the week. Users can still customize this value if needed.
 
 Once the request is created, a thread will take care of it by:
 
@@ -42,13 +56,36 @@ gcloud run deploy wodbooker \
     --quiet
 ```
 
-## Running locally (raspberry pi)
+## Running locally (Linux)
 
 ### Requirements
 
 Install docker
 
 ### Setup
+
+The easiest way to run the project is using docker compose. So go ahead:
+
+```bash
+docker compose up -d --build
+```
+
+Once the build finishes the containers should be up & running.
+
+The application will be accessible at:
+
+- 127.0.0.1:5100
+- 127.0.0.1:80
+- 127.0.0.1:443
+
+To access from outside your local network you'll need to open two ports:
+
+- Open the 443 port in your router and forward it to `127.0.0.1:443`.
+- Open the 80 port in your router and forward it to `127.0.0.1:80`. This will be used for letsencrypt to renew the certificate.
+
+For the letsencrypt configuration see the last section of this README.
+
+### Setup (legacy)
 
 Build images, create docker network
 
@@ -61,6 +98,32 @@ docker build -t wodbooker .
 Run containers:
 
 ```bash
-docker run --rm -p 5001:5001 --network=net -e EMAIL_PASSWORD=${EMAIL_PASSWORD} -v $(pwd):/app --name wodbooker wodbooker
+docker run --rm -p 5100:5000 --network=net \
+    -e EMAIL_PASSWORD=${EMAIL_PASSWORD} \
+    -e EMAIL_USER=${EMAIL_USER} \
+    -e EMAIL_SENDER=${EMAIL_SENDER} \
+    -v $(pwd):/app --name wodbooker wodbooker
 docker run --rm --name nginx-wodbooker  --network=net -p 80:80 nginx-wodbooker
+```
+
+## SSL certificate for nginx
+
+The first time we run wodbooker nginx container we need to run this:
+
+```bash
+/usr/bin/docker exec -ti nginx-wodbooker certbot --nginx -d wodbooker.yourdomain.com
+```
+
+The above command will deploy the letsencrypt certificate for the first time.
+
+From then on, the certificate only needs to be renewed every three months. This can be automated in crontab:
+
+```bash
+crontab -e
+```
+
+Add this line:
+
+```bash
+0 0 * * * /usr/bin/docker exec -ti nginx-wodbooker certbot renew --quiet
 ```

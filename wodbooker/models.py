@@ -16,7 +16,7 @@ class Booking(db.Model):
     url = db.Column(db.String(128))
     available_at = db.Column(db.Time)
     type_class = db.Column(db.Integer)
-    offset = db.Column(db.Integer)
+    offset = db.Column(db.Integer, default=0)  # Made optional with default 0
     events = db.relationship('Event', backref='booking', lazy=True, cascade="all, delete-orphan")
     is_active = db.Column(db.Boolean, default=True)
 

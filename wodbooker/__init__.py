@@ -99,8 +99,8 @@ def set_version():
     """
     Set version in g object
     """
-    # Not sure why is this used in the original code
-    g.version = "DUMMY"
+    # Set a proper version or leave empty instead of "DUMMY"
+    g.version = "1.0.0"
 
 
 @app.before_request
