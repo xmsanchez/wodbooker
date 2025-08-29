@@ -166,7 +166,7 @@ class Booker(StoppableThread):
                         class_is_full_notification_sent = False
 
                     email = email or SuccessEmail(self._booking, CLASS_BOOKED_MAIL_SUBJECT, CLASS_BOOKED_MAIL_BODY)
-                    send_email(self._booking.user, email)
+                    # send_email(self._booking.user, email)
 
                     self._booking.last_book_date = day_to_book
                     self._booking.booked_at = datetime.now().replace(microsecond=0)
@@ -176,7 +176,7 @@ class Booker(StoppableThread):
                     skip_current_week = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M:%S")))
                     _add_event(event)
-                    send_email(self._booking.user, ErrorEmail(self._booking, "Clase no encontrada", event.event))
+                    # send_email(self._booking.user, ErrorEmail(self._booking, "Clase no encontrada", event.event))
                 # In Mayanti box a penalty has been set in place when people makes a book cancellation
                 # This should be managed in the scraper.py book function but I don't really know
                 # What's the API response and I won't risk it so I'll treat it as a "CLASS IS FULL" event
@@ -189,13 +189,13 @@ class Booker(StoppableThread):
                     skip_current_week = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
                     _add_event(event)
-                    send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
+                    # send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                     if not class_is_full_notification_sent:
-                        send_email(self._booking.user, ErrorEmail(self._booking, "Clase llena", waiter.log_message))
+                        # send_email(self._booking.user, ErrorEmail(self._booking, "Clase llena", waiter.log_message))
                         class_is_full_notification_sent = True
                 except BookingNotAvailable as e:
                     if e.available_at:
@@ -215,8 +215,9 @@ class Booker(StoppableThread):
                     waiter = _TimeWaiter(self._booking, EventMessage.UNEXPECTED_NETWORK_ERROR % sleep_for,
                                             datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     if errors == 0:
-                        send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
-                                                                  UNEXPECTED_ERROR_MAIL_BODY))
+                        # send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
+                        #                                          UNEXPECTED_ERROR_MAIL_BODY))
+                        pass
                     errors += 1
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
@@ -224,8 +225,9 @@ class Booker(StoppableThread):
                     waiter = _TimeWaiter(self._booking, EventMessage.UNEXPECTED_WODBUSTER_RESPONSE % sleep_for,
                                          datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     if errors == 0:
-                        send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
-                                                                  UNEXPECTED_ERROR_MAIL_BODY))
+                        #send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
+                        #                                          UNEXPECTED_ERROR_MAIL_BODY))
+                        pass
                     errors += 1
                 except PasswordRequired:
                     force_exit = True
@@ -233,20 +235,20 @@ class Booker(StoppableThread):
                     self._booking.user.force_login = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.CREDENTIALS_EXPIRED)
                     _add_event(event)
-                    send_email(self._booking.user, ErrorEmail(self._booking, "Credenciales caducadas", event.event))
+                    # send_email(self._booking.user, ErrorEmail(self._booking, "Credenciales caducadas", event.event))
                 except LoginError:
                     force_exit = True
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
                     self._booking.user.force_login = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.LOGIN_FAILED)
                     _add_event(event)
-                    send_email(self._booking.user, ErrorEmail(self._booking, "Login fallido", event.event))
+                    # send_email(self._booking.user, ErrorEmail(self._booking, "Login fallido", event.event))
                 except InvalidBox:
                     force_exit = True
                     logging.warning("User %s accessing to an invalid box detected. Aborting...", self._booking.user.email)
                     event = Event(booking_id=self._booking.id, event=EventMessage.INVALID_BOX_URL)
                     _add_event(event)
-                    send_email(self._booking.user, ErrorEmail(self._booking, "Box inválido", event.event))
+                    # send_email(self._booking.user, ErrorEmail(self._booking, "Box inválido", event.event))
                 finally:
                     db.session.commit()
 

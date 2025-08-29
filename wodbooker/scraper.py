@@ -235,9 +235,10 @@ class Scraper():
                 raise InvalidBox("Provided URL is not accesible for the given user")
             if request.status_code != 200:
                 raise InvalidWodBusterResponse('Invalid response status from WodBuster')
-
             return request.json()
         except requests.exceptions.JSONDecodeError as e:
+            if "Pon tu usuario y contraseña para acceder a reservar tus clases" in request.text:
+                logging.error('There was an error trying to log the user in. The user should try to access wodbooker from a private browser window in order to force the cookie to update.')
             raise InvalidWodBusterResponse('WodBuster returned a non JSON response') from e
         except requests.exceptions.RequestException as e:
             raise InvalidWodBusterResponse('WodBuster returned a non expected response') from e
