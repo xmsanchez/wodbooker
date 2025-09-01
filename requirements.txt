@@ -8,12 +8,8 @@ Flask-Login==0.6.3
 Flask-wtf==1.2.1
 requests==2.31.0
 sseclient-py==1.8.0
-pause==0.3
 pytz==2023.3.post1
 flask-babel==4.0.0
 func-timeout==4.3.5
 EmailMessage==0.2.1
 cloudscraper==1.2.71
-# playwright==1.49.1
-# selenium==4.27.1
-# webdriver-manager

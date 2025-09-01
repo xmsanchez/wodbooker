@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, date, time
 from abc import ABC, abstractmethod
 import random
 import logging
-import pause
+import time as time_module
 import pytz
 import os
 from flask import current_app as app
@@ -96,6 +96,7 @@ class Booker(StoppableThread):
             datetime_to_book = None
             skip_current_week = False
             class_is_full_notification_sent = False
+            sleep_milliseconds = random.randint(1, 300)/100
             while errors < _MAX_ERRORS and not force_exit:
                 try:
                     book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
@@ -105,9 +106,8 @@ class Booker(StoppableThread):
                         logging.info("Waiting for class %s is over.", datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
 
                         # Add another sleep here in case we are trying to make multiple books due to previous penalizations
-                        sleep = random.randint(1, 100)/100
-                        logging.info("Sleeping for %s seconds", sleep)
-                        pause.seconds(sleep)
+                        logging.info("Sleeping for %s seconds", sleep_milliseconds)
+                        time_module.sleep(sleep_milliseconds)
 
                         # Continue after the sleep
                         event = Event(booking_id=self._booking.id,
@@ -139,7 +139,7 @@ class Booker(StoppableThread):
                     # Check if user has priority - non-priority users wait 1 second
                     if self._booking.user.email not in PRIORITY_USERS:
                         logging.info("User %s is not in priority list, waiting 1 second before booking", self._booking.user.email)
-                        pause.seconds(1)
+                        time_module.sleep(1)
                     else:
                         logging.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
 
@@ -147,9 +147,8 @@ class Booker(StoppableThread):
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
 
                     # generate a random number in milliseconds to avoid being detected as a bot
-                    sleep = random.randint(1, 100)/100
-                    logging.info("Sleeping for %s seconds", sleep)
-                    pause.seconds(sleep)
+                    logging.info("Sleeping for %s seconds", sleep_milliseconds)
+                    time_module.sleep(sleep_milliseconds)
 
                     scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
                     logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
@@ -177,11 +176,14 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M:%S")))
                     _add_event(event)
                     # send_email(self._booking.user, ErrorEmail(self._booking, "Clase no encontrada", event.event))
-                # In Mayanti box a penalty has been set in place when people makes a book cancellation
+
+                # In some boxes a penalty can be set in place when people make a book cancellation
                 # This should be managed in the scraper.py book function but I don't really know
                 # What's the API response and I won't risk it so I'll treat it as a "CLASS IS FULL" event
                 except BookingPenalization as e:
                     logging.warning("There is a penalty for your bookings this week: %s", e)
+                    # The minimum wait are 10 seconds, therefore let's sleep the thread for 10 seconds
+                    time_module.sleep(10)
                     waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
@@ -304,7 +306,10 @@ class _TimeWaiter(_Waiter):
             event = Event(booking_id=self.booking.id, event=self.log_message)
             _add_event(event)
             db.session.commit()
-            pause.until(self._wait_datetime)
+            # Calculate seconds to wait and use time.sleep instead of pause.until
+            seconds_to_wait = (self._wait_datetime - datetime.now(_MADRID_TZ)).total_seconds()
+            if seconds_to_wait > 0:
+                time_module.sleep(seconds_to_wait)
 
 
 class _EventWaiter(_Waiter):
