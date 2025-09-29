@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import random
 import logging
 import time as time_module
+import threading
 import pytz
 import os
 from flask import current_app as app
@@ -17,7 +18,7 @@ from .scraper import get_scraper, Scraper
 from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
-    ClassNotFound, BookingFailed, BookingPenalization
+    ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
 from .models import db, Booking, Event
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
@@ -34,6 +35,72 @@ _MAX_ERRORS = 50
 
 __CURRENT_THREADS = {
 }
+
+# Simple in-memory coordination for user bookings
+_USER_COORDINATORS = {}  # user_email -> _UserBookingCoordinator
+_LAST_BOOKING_TIME = {}  # user_email -> datetime
+
+
+class _UserBookingCoordinator:
+    """
+    Simple coordinator to manage booking timing for a single user
+    """
+    
+    def __init__(self, user_email: str):
+        self.user_email = user_email
+        self.lock = threading.Lock()
+        self.last_booking_time = None
+    
+    def wait_for_booking_slot(self):
+        """
+        Wait if necessary to ensure 1-second minimum interval between bookings
+        """
+        with self.lock:
+            now = datetime.now(_MADRID_TZ)
+            if self.last_booking_time:
+                time_since_last = (now - self.last_booking_time).total_seconds()
+                if time_since_last < 1.0:
+                    sleep_time = 1.0 - time_since_last
+                    logging.info("User %s: Waiting %.2f seconds to maintain 1-second booking interval", 
+                               self.user_email, sleep_time)
+                    time_module.sleep(sleep_time)
+            
+            self.last_booking_time = datetime.now(_MADRID_TZ)
+    
+    def get_priority_score(self, booking: Booking) -> int:
+        """
+        Calculate priority score based on PRIORITY_USERS and opening reservation time
+        Lower score = higher priority
+        Priority users always have precedence over non-priority users
+        """
+        # Priority users always get highest priority (lowest score)
+        if booking.user.email in PRIORITY_USERS:
+            if not booking.available_at:
+                return 0  # Highest priority if no time specified
+            # Convert time to seconds since midnight for comparison
+            time_seconds = (booking.available_at.hour * 3600 + 
+                           booking.available_at.minute * 60 + 
+                           booking.available_at.second)
+            return time_seconds  # Priority users get 0-86399 range
+        
+        # Non-priority users get lower priority (higher score)
+        if not booking.available_at:
+            return 999999  # Lowest priority if no time specified
+        
+        # Convert time to seconds since midnight for comparison
+        time_seconds = (booking.available_at.hour * 3600 + 
+                       booking.available_at.minute * 60 + 
+                       booking.available_at.second)
+        return time_seconds + 100000  # Non-priority users get 100000-186399 range
+
+
+def _get_user_coordinator(user_email: str) -> _UserBookingCoordinator:
+    """
+    Get or create coordinator for a user
+    """
+    if user_email not in _USER_COORDINATORS:
+        _USER_COORDINATORS[user_email] = _UserBookingCoordinator(user_email)
+    return _USER_COORDINATORS[user_email]
 
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
@@ -143,6 +210,10 @@ class Booker(StoppableThread):
                     else:
                         logging.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
 
+                    # Use coordinator to ensure 1-second minimum interval between bookings
+                    coordinator = _get_user_coordinator(self._booking.user.email)
+                    coordinator.wait_for_booking_slot()
+
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
 
@@ -150,7 +221,18 @@ class Booker(StoppableThread):
                     logging.info("Sleeping for %s seconds", sleep_milliseconds)
                     time_module.sleep(sleep_milliseconds)
 
-                    scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
+                    # Attempt booking with retry logic for booking locks
+                    booking_successful = False
+                    while not booking_successful and not force_exit:
+                        try:
+                            scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
+                            booking_successful = True
+                        except BookingLockedException as e:
+                            logging.warning("Booking locked for user %s: %s. Retrying in 1 second...", 
+                                          self._booking.user.email, str(e))
+                            time_module.sleep(1)  # Wait 1 second before retry
+                            # Don't increment error count for booking locks
+                            continue
                     logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
@@ -361,7 +443,10 @@ def start_booking_loop(booking: Booking) -> None:
     :param offset: The offset from today to book
     :param availabe_at: The time when the booking is available
     """
-    logging.info("Starting thread for booking %s", booking.id)
+    coordinator = _get_user_coordinator(booking.user.email)
+    priority_score = coordinator.get_priority_score(booking)
+    logging.info("Starting thread for booking %s (user: %s, priority score: %d)", 
+                booking.id, booking.user.email, priority_score)
     booker = Booker(booking, app.app_context())
     __CURRENT_THREADS[booking.id] = booker
     booker.start()

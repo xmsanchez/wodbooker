@@ -10,7 +10,7 @@ import pytz
 from bs4 import BeautifulSoup
 from .exceptions import LoginError, InvalidWodBusterResponse, \
     BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox, \
-    ClassNotFound, BookingFailed, BookingPenalization
+    ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.3"
@@ -204,6 +204,9 @@ class Scraper():
                     if "Penalización" in error_message:
                         logging.info('Booking penalization.')
                         raise BookingPenalization(error_message)
+                    elif "another place" in error_message.lower() or "otro lugar" in error_message.lower():
+                        logging.info('Booking locked - user using reservation in another place.')
+                        raise BookingLockedException(error_message)
                     else:
                         raise BookingFailed(error_message)
 

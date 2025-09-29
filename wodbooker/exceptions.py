@@ -51,3 +51,8 @@ class BookingPenalization(Exception):
     """
     Raises when there is a booking penalization and you book too soon
     """
+
+class BookingLockedException(Exception):
+    """
+    Raises when booking is locked because user is using booking reservation in another place
+    """
