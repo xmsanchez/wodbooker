@@ -1,4 +1,4 @@
-FROM nginx:latest
+FROM nginx:1.29.1-bookworm
 
 RUN apt update
 RUN apt install -y certbot python3-certbot-nginx
