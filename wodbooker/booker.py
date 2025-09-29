@@ -163,7 +163,7 @@ class Booker(StoppableThread):
             datetime_to_book = None
             skip_current_week = False
             class_is_full_notification_sent = False
-            sleep_milliseconds = random.randint(1, 300)/100
+            sleep_milliseconds = random.randint(1, 1000) / 1000
             while errors < _MAX_ERRORS and not force_exit:
                 try:
                     book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
