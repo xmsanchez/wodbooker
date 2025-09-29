@@ -125,13 +125,14 @@ class OffsetField(fields.IntegerField):
 class BookingForm(form.Form):
 
     dow = fields.SelectField('Día de la semana a reservar', choices=[(0, 'Lunes'), (1, 'Martes'), (
-        2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')])
+        2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')], coerce=int)
     time = TimeField('Hora a reservar', validators=[validators.DataRequired()])
     url = fields.StringField('URL de WodBuster (ej: https://YOUR_BOX.wodbuster.com)', validators=[validators.DataRequired()])
     booking_open_day = fields.SelectField(
         'Día de apertura de reservas',
         choices=[(0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')],
-        default=5
+        default=5,
+        coerce=int
     )
     available_at = TimeField('Hora de apertura de reservas', validators=[validators.DataRequired()])
     type_class = fields.SelectField('Tipo de clase a reservar (wod, openbox)', choices=[(0, 'wod'), (1, 'openbox')], 
@@ -150,6 +151,19 @@ class BookingForm(form.Form):
             self.offset = offset
         except Exception:
             self.offset = 7  # fallback
+
+
+    @staticmethod
+    def calculate_booking_open_day(dow, offset):
+        """
+        Calculate the booking open day from the class day of week and offset
+        :param dow: Day of week (0=Monday, 6=Sunday)
+        :param offset: Offset in days
+        :return: Booking open day (0=Monday, 6=Sunday)
+        """
+        if offset == 0:
+            return dow
+        return (dow - offset) % 7
 
     def validate_dow(self, field):
         if db.session.query(Booking).filter(
@@ -298,6 +312,15 @@ class BookingAdmin(sqla.ModelView):
         if form.dow.data is not None and form.offset is None: # Use form.offset
             form.offset = DEFAULT_OFFSETS_BY_DAY.get(form.dow.data, 0)
 
+        return form
+
+    def edit_form(self, obj=None):
+        form = super().edit_form(obj)
+        if obj:
+            # Calculate and set the booking_open_day from the stored dow and offset
+            booking_open_day = BookingForm.calculate_booking_open_day(obj.dow, obj.offset)
+            # Set the data after form creation to avoid validation issues
+            form.booking_open_day.data = booking_open_day
         return form
 
 
