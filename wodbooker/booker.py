@@ -28,6 +28,12 @@ _MADRID_TZ = pytz.timezone('Europe/Madrid')
 # Emails should be separated by spaces
 PRIORITY_USERS = os.getenv('PRIORITY_USERS_EMAILS', '').split()
 
+# Whitelist for bookings - if set, only emails in this list can book
+# Whitelist is read from environment variable BOOKING_WHITELIST_EMAILS
+# Emails should be separated by spaces
+# If empty/null, all emails are allowed (current behavior)
+WHITELIST_EMAILS = os.getenv('BOOKING_WHITELIST_EMAILS', '').split()
+
 # Increase the max errors, this is to prevent bookings
 # from not succeeding when there is a penalization
 # I know it's a weird workaround :-)
@@ -443,6 +449,17 @@ def start_booking_loop(booking: Booking) -> None:
     :param offset: The offset from today to book
     :param availabe_at: The time when the booking is available
     """
+    # Check whitelist if it's configured
+    if WHITELIST_EMAILS and booking.user.email not in WHITELIST_EMAILS:
+        logging.warning("Booking attempt blocked: User %s is not in the whitelist. Whitelist contains: %s", 
+                       booking.user.email, ', '.join(WHITELIST_EMAILS))
+        # Create an event to log this blocked attempt
+        event = Event(booking_id=booking.id, 
+                     event=f"Intento de reserva fallido.")
+        _add_event(event)
+        db.session.commit()
+        return
+
     coordinator = _get_user_coordinator(booking.user.email)
     priority_score = coordinator.get_priority_score(booking)
     logging.info("Starting thread for booking %s (user: %s, priority score: %d)", 
