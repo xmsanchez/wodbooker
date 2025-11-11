@@ -27,17 +27,42 @@
     </div>
   {% else %}
     <div class="accordion" id="bookingsAccordion">
+      {% set weekday_ns = namespace(current=None) %}
       {% for row in data %}
-        <div class="card">
-          <div class="card-header d-flex justify-content-between" id="heading{{row['id']}}">
-            <h2 class="mb-0 mr-auto">
-              <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}">
-                  <h4 style="margin-bottom: 0px;">{{ get_value(row, 'dow') }} {{ get_value(row, 'time') }}
+        {% set row_weekday_dow = row.dow %}
+        {% if weekday_ns.current != row_weekday_dow %}
+          {% set weekday_ns.current = row_weekday_dow %}
+          {% set stats = weekday_stats.get(row_weekday_dow) or {'successful': 0, 'waiting': 0, 'errors': 0} %}
+          <div class="weekday-header" style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #475569; font-size: 1rem;">
+            <span>{{ DAYS_OF_WEEK[row_weekday_dow] }}</span>
+            {% if stats['successful'] > 0 or stats['waiting'] > 0 or stats['errors'] > 0 %}
+              <span style="font-size: 0.875rem; font-weight: 400; margin-left: 0.75rem;">
+                {% if stats['successful'] > 0 %}
+                  <span style="color: #059669;">Reservadas {{ stats['successful'] }}</span>
+                {% endif %}
+                {% if stats['waiting'] > 0 %}
+                  {% if stats['successful'] > 0 %} / {% endif %}
+                  <span style="color: #f59e0b;">Clase llena {{ stats['waiting'] }}</span>
+                {% endif %}
+                {% if stats['errors'] > 0 %}
+                  {% if stats['successful'] > 0 or stats['waiting'] > 0 %} / {% endif %}
+                  <span style="color: #dc2626;">Errores {{ stats['errors'] }}</span>
+                {% endif %}
+              </span>
+            {% endif %}
+          </div>
+        {% endif %}
+        {% set is_same_weekday_as_prev = loop.index0 > 0 and data[loop.index0 - 1].dow == row_weekday_dow %}
+        <div class="card" style="margin-bottom: {% if is_same_weekday_as_prev %}0.25rem{% else %}0.5rem{% endif %};">
+          <div class="card-header d-flex justify-content-between" id="heading{{row['id']}}" style="padding: 0.5rem 1rem;">
+            <h2 class="mb-0 mr-auto" style="margin-bottom: 0;">
+              <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}" style="padding: 0; text-decoration: none;">
+                  <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">{{ get_value(row, 'time') }}
                     {% if row['is_active'] and not row['is_thread_active'] %}
                       <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
                     {% endif %}
                   </h4>
-                <p>Apertura reserva: {{ get_value(row, 'available_at') }}</p>
+                <p style="margin-bottom: 0; font-size: 0.875rem; color: #64748b;">Apertura reserva: {{ get_value(row, 'available_at') }}</p>
               </button>
             </h2>
             {{ list_row_actions[2].render_ctx(get_pk_value(row), row) }}
@@ -46,21 +71,21 @@
           </div>
     
           <div id="collapse{{row['id']}}" class="collapse" aria-labelledby="heading{{row['id']}}" data-parent="#bookingsAccordion">
-            <div class="card-body">
-              <div class="container-fluid">
-                <p>
+            <div class="card-body" style="padding: 0.75rem 1rem;">
+              <div class="container-fluid" style="padding: 0;">
+                <p style="margin-bottom: 0.5rem;">
                   <b>Box</b><br/>
                   <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ get_value(row, 'url') }}" target="_blank">{{ get_value(row, 'url') }}</a> 
                 </p>
-                <p>
+                <p style="margin-bottom: 0.5rem;">
                   <b>Activo</b><br/>
                   {{ "Sí" if row["is_active"] else "No" }}
                 </p>
-                <p>
+                <p style="margin-bottom: 0.5rem;">
                   <b>Apertura de reservas</b><br/>
                   {{ get_value(row, 'offset') }} a las {{ get_value(row, 'available_at') }}
                 </p>  
-                <p>
+                <p style="margin-bottom: 0.5rem;">
                   <b>Última reserva realizada</b><br/>
                   {% if row['last_book_date'] %}
                     {{ get_value(row, 'last_book_date') }}
@@ -68,7 +93,7 @@
                     <i>Ninguna</i>
                   {% endif %}
                 </p>  
-                <p>
+                <p style="margin-bottom: 0.5rem;">
                   <b>Estado</b><br/>
                   {% if row['last_events'] %}
                     {{ row['last_events'][0]['date'].strftime('%d/%m/%Y %H:%M') }}: 
@@ -80,15 +105,16 @@
                     <i>Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí cuando la reserva esté activa según vayan ocurriendo.</i>
                   {% endif %}
                 </p>
-                <b>Tipo de clase</b><br/>
-                {% if row['type_class'] %}
-                  {% if row['type_class'] == 1 %}
-                    OpenBox
-                  {% else %}
-                    Wod
+                <p style="margin-bottom: 0;">
+                  <b>Tipo de clase</b><br/>
+                  {% if row['type_class'] %}
+                    {% if row['type_class'] == 1 %}
+                      OpenBox
+                    {% else %}
+                      Wod
+                    {% endif %}
                   {% endif %}
-                {% endif %}
-              </p>  
+                </p>  
               </div>
             </div>
           </div>

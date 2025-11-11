@@ -37,7 +37,7 @@ WHITELIST_EMAILS = os.getenv('BOOKING_WHITELIST_EMAILS', '').split()
 # Increase the max errors, this is to prevent bookings
 # from not succeeding when there is a penalization
 # I know it's a weird workaround :-)
-_MAX_ERRORS = 50
+_MAX_ERRORS = 500
 
 __CURRENT_THREADS = {
 }
@@ -272,6 +272,7 @@ class Booker(StoppableThread):
                     logging.warning("There is a penalty for your bookings this week: %s", e)
                     # The minimum wait are 10 seconds, therefore let's sleep the thread for 10 seconds
                     time_module.sleep(10)
+                    time_module.sleep(sleep_milliseconds)
                     waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
