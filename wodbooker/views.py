@@ -219,7 +219,44 @@ class BookingAdmin(sqla.ModelView):
         for obj in data:
             obj.is_thread_active = is_booking_running(obj)
             obj.last_events = self._get_last_events(obj.events)
+        # Sort by weekday (dow) first, then by reservation time
+        data = sorted(data, key=lambda x: (x.dow, x.time))
+        
+        # Calculate statistics for each weekday
+        weekday_stats = defaultdict(lambda: {'successful': 0, 'waiting': 0, 'errors': 0})
+        for obj in data:
+            dow = obj.dow
+            if obj.last_events:
+                # Check the latest event(s) to determine status
+                # last_events is a list of Event objects, each with an 'event' string attribute
+                for event in obj.last_events:
+                    event_str = event.event if isinstance(event.event, str) else str(event.event)
+                    # Check for successful booking
+                    if EventMessage.BOOKING_COMPLETED.value.split('%')[0] in event_str:
+                        weekday_stats[dow]['successful'] += 1
+                        break
+                    # Check for class full (waiting)
+                    elif EventMessage.CLASS_FULL.value.split('%')[0] in event_str:
+                        weekday_stats[dow]['waiting'] += 1
+                        break
+                    # Check for errors
+                    elif (EventMessage.BOOKING_ERROR.value.split('%')[0] in event_str or
+                          EventMessage.CREDENTIALS_EXPIRED.value in event_str or
+                          EventMessage.LOGIN_FAILED.value in event_str or
+                          EventMessage.INVALID_BOX_URL.value in event_str or
+                          EventMessage.TOO_MANY_ERRORS.value in event_str):
+                        weekday_stats[dow]['errors'] += 1
+                        break
+        
+        # Store statistics in a way that can be accessed in template
+        self._weekday_stats = dict(weekday_stats)
         return count, data
+    
+    def render(self, template, **kwargs):
+        # Pass DAYS_OF_WEEK and weekday statistics to template context
+        kwargs['DAYS_OF_WEEK'] = DAYS_OF_WEEK
+        kwargs['weekday_stats'] = getattr(self, '_weekday_stats', {})
+        return super().render(template, **kwargs)
 
     @staticmethod
     def _get_last_events(events):
