@@ -337,4 +337,8 @@
     <span></span><span class="text-small">{{ g.version }}</span>
   </footer>
   -->
+  {% if current_user.is_authenticated %}
+    <script src="{{ url_for('static', filename='push-notifications.js') }}"></script>
+    <script src="{{ url_for('static', filename='autosync.js') }}"></script>
+  {% endif %}
 {% endblock %}

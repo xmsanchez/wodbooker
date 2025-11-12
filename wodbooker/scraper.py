@@ -398,6 +398,99 @@ class Scraper():
             logging.exception("Unexpected error extracting athlete ID for user %s", self._user)
             return (None, None)
 
+    def get_user_booked_classes(self, box_url: str, athlete_id: str, date: datetime.date) -> list:
+        """
+        Get classes booked by the user for a specific date.
+        :param box_url: The WodBuster box URL (e.g., https://mayantibox.wodbuster.com)
+        :param athlete_id: The athlete ID with dashes (e.g., 4bbb52ac-6228-4194-a7e5-eb258c846adf)
+        :param date: The date to fetch bookings for
+        :return: List of dictionaries with booked class information:
+                 [{'class_id': int, 'date': date, 'time': time, 'class_name': str, 'class_type': str}, ...]
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid
+        :raises RequestException: If a network error occurs
+        """
+        self.login()
+        
+        # Convert athlete_id from format with dashes to format without dashes
+        athlete_id_no_dashes = athlete_id.replace('-', '')
+        
+        # Calculate epoch timestamp for midnight UTC of the date
+        midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
+        epoch = int(midnight.timestamp())
+        
+        # Build the API URL
+        api_url = f'{box_url}/athlete/handlers/LoadClass.ashx?ticks={epoch}&idu={athlete_id_no_dashes}'
+        
+        try:
+            response = self._book_request(api_url)
+            
+            if not response or 'Data' not in response:
+                logging.warning("No data in response for user %s on date %s", self._user, date)
+                return []
+            
+            booked_classes = []
+            
+            # Iterate through all classes in the response
+            for class_data in response.get('Data', []):
+                hour = class_data.get('Hora', '')
+                valores = class_data.get('Valores', [])
+                
+                # Check each class type (wod, openbox, etc.)
+                for valor_data in valores:
+                    valor = valor_data.get('Valor', {})
+                    atletas_entrenando = valor.get('AtletasEntrenando', [])
+                    
+                    # Check if user appears in AtletasEntrenando
+                    user_found = False
+                    for atleta in atletas_entrenando:
+                        atleta_url = atleta.get('Url', '')
+                        # Check if the URL contains the athlete_id
+                        if athlete_id in atleta_url or athlete_id_no_dashes in atleta_url:
+                            user_found = True
+                            break
+                    
+                    if user_found:
+                        # Extract class information
+                        class_id = valor.get('Id')
+                        class_name = valor_data.get('Nombre', '')
+                        tipo_entrenamiento = valor.get('IdTipoEntrenamiento', 1)
+                        
+                        # Determine class type based on IdTipoEntrenamiento
+                        # Common types: 1=Wod, 2=OpenBox, 7=OpenBox*, etc.
+                        if tipo_entrenamiento == 1:
+                            class_type = 'wod'
+                        elif tipo_entrenamiento in [2, 7]:
+                            class_type = 'openbox'
+                        else:
+                            class_type = f'type_{tipo_entrenamiento}'
+                        
+                        # Parse time
+                        try:
+                            time_parts = hour.split(':')
+                            class_time = datetime.time(int(time_parts[0]), int(time_parts[1]), int(time_parts[2]) if len(time_parts) > 2 else 0)
+                        except (ValueError, IndexError):
+                            logging.warning("Could not parse time %s for class %s", hour, class_id)
+                            continue
+                        
+                        booked_classes.append({
+                            'class_id': class_id,
+                            'date': date,
+                            'time': class_time,
+                            'class_name': class_name,
+                            'class_type': class_type
+                        })
+            
+            logging.info("Found %d booked classes for user %s on date %s", len(booked_classes), self._user, date)
+            return booked_classes
+            
+        except requests.exceptions.RequestException as e:
+            logging.exception("Error fetching booked classes for user %s on date %s", self._user, date)
+            raise InvalidWodBusterResponse('Error fetching booked classes') from e
+        except Exception as e:
+            logging.exception("Unexpected error fetching booked classes for user %s on date %s", self._user, date)
+            return []
+
 
 __SCRAPERS = {}
 

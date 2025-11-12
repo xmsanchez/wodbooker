@@ -36,6 +36,81 @@ Once the request is created, a thread will take care of it by:
 
 In order to avoid CloudFare restrictions it's highly recommended to create an entry in your `/etc/hosts` file pointing `wodbuster.com` to the final WodBuster server.
 
+## Push Notifications
+
+WodBooker supports browser push notifications to remind users before their booked classes. Users can enable push notifications and choose to receive reminders at 1 hour, 30 minutes, and/or 15 minutes before a class.
+
+### Features
+
+- **Browser Push Notifications**: Uses the Web Push API to send notifications directly to users' browsers
+- **Configurable Reminders**: Users can enable reminders at 1 hour, 30 minutes, and 15 minutes before classes
+- **Automatic Sync**: Optional automatic synchronization of WodBuster bookings when the page loads
+- **User Preferences**: All notification settings are configurable in the "Preferencias" menu
+
+### Setup
+
+#### 1. Generate VAPID Keys
+
+VAPID (Voluntary Application Server Identification) keys are required for push notifications. Generate them using the provided script:
+
+```bash
+python generate_vapid_keys.py your-email@example.com
+```
+
+This will output three environment variables that you need to set:
+- `VAPID_PUBLIC_KEY`: The public key (safe to share)
+- `VAPID_PRIVATE_KEY`: The private key (keep secret!)
+- `VAPID_CLAIM_EMAIL`: Contact email for the service (format: `mailto:your-email@example.com`)
+
+**Note**: The email in `VAPID_CLAIM_EMAIL` is not used to send emails. It's just a contact identifier required by the VAPID protocol to identify who controls the push notification service.
+
+#### 2. Set Environment Variables
+
+Add the VAPID keys to your environment variables. If using Docker Compose, add them to your `.env` file:
+
+```bash
+VAPID_PUBLIC_KEY=your-generated-public-key
+VAPID_PRIVATE_KEY=your-generated-private-key
+VAPID_CLAIM_EMAIL=mailto:your-email@example.com
+```
+
+#### 3. Restart the Application
+
+After setting the environment variables, restart your application:
+
+```bash
+docker compose restart wodbooker
+```
+
+### User Experience
+
+Users can enable push notifications by:
+
+1. Going to **Preferencias** in the header menu
+2. Scrolling to the **Notificaciones Push** section
+3. Clicking **"Activar Notificaciones Push"**
+4. Granting permission when the browser prompts
+5. Selecting which reminder times they want (1 hour, 30 minutes, 15 minutes)
+
+The push notifications will automatically be sent based on the user's preferences and their confirmed, non-cancelled bookings.
+
+### Technical Details
+
+- **Service Worker**: A service worker (`/static/sw.js`) handles push events in the browser
+- **Background Scheduler**: A background thread checks for upcoming classes every minute and sends notifications accordingly
+- **Browser Support**: Works in all modern browsers that support the Web Push API (Chrome, Firefox, Edge, Safari, Brave, etc.)
+- **HTTPS Required**: Push notifications require HTTPS (or localhost for development)
+
+### Troubleshooting
+
+If push notifications aren't working:
+
+1. **Check VAPID Keys**: Ensure `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` are set correctly
+2. **Check Browser Console**: Open the browser console (F12) to see any errors
+3. **Check Server Logs**: Look for errors in the application logs
+4. **Verify HTTPS**: Push notifications require HTTPS (except on localhost)
+5. **Check Browser Permissions**: Ensure the user has granted notification permissions
+
 ## Webapp
 Run the app by just running:
 
@@ -64,7 +139,19 @@ Install docker
 
 ### Setup
 
-The easiest way to run the project is using docker compose. So go ahead:
+1. **Set up environment variables**: Create a `.env` file with the required variables (see [Push Notifications Setup](#push-notifications) for VAPID keys):
+
+```bash
+EMAIL_USER=your-email@example.com
+EMAIL_PASSWORD=your-email-password
+EMAIL_SENDER=your-email@example.com
+EMAIL_HOST=smtp.example.com
+VAPID_PUBLIC_KEY=your-vapid-public-key
+VAPID_PRIVATE_KEY=your-vapid-private-key
+VAPID_CLAIM_EMAIL=mailto:your-email@example.com
+```
+
+2. **Run with Docker Compose**: The easiest way to run the project is using docker compose:
 
 ```bash
 docker compose up -d --build
@@ -102,6 +189,9 @@ docker run --rm -p 5100:5000 --network=net \
     -e EMAIL_PASSWORD=${EMAIL_PASSWORD} \
     -e EMAIL_USER=${EMAIL_USER} \
     -e EMAIL_SENDER=${EMAIL_SENDER} \
+    -e VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY} \
+    -e VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY} \
+    -e VAPID_CLAIM_EMAIL=${VAPID_CLAIM_EMAIL} \
     -v $(pwd):/app --name wodbooker wodbooker
 docker run --rm --name nginx-wodbooker  --network=net -p 80:80 nginx-wodbooker
 ```

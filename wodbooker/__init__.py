@@ -8,16 +8,17 @@ import pickle
 import requests
 import cloudscraper
 import logging
-from flask import Flask, redirect, request, session, g
+from flask import Flask, redirect, request, session, g, jsonify
 
 from flask_admin import Admin
 import flask_login as login
 from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView, UserView
-from .models import User, Booking, Event, db
-from .booker import start_booking_loop
+from .models import User, Booking, Event, db, PushSubscription
+from .booker import start_booking_loop, sync_wodbuster_bookings
 from .mailer import process_maling_queue
+from .notification_scheduler import _notification_scheduler_loop
 
 # Configure logging
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
@@ -52,9 +53,80 @@ app.config['CSRF_ENABLED'] = True
 app.config['RECAPTCHA_PUBLIC_KEY'] = os.environ.get('RECAPTCHA_PUBLIC_KEY')
 app.config['RECAPTCHA_PRIVATE_KEY'] = os.environ.get('RECAPTCHA_PRIVATE_KEY')
 
+# VAPID keys for Web Push API
+app.config['VAPID_PUBLIC_KEY'] = os.environ.get('VAPID_PUBLIC_KEY')
+app.config['VAPID_PRIVATE_KEY'] = os.environ.get('VAPID_PRIVATE_KEY')
+app.config['VAPID_CLAIM_EMAIL'] = os.environ.get('VAPID_CLAIM_EMAIL', 'mailto:admin@example.com')
+
 # Build a sample db on the fly, if one does not exist yet.
 app_dir = op.realpath(os.path.dirname(__file__))
 database_path = op.join(app_dir, app.config['DATABASE_FILE'])
+
+# Check and run migration BEFORE initializing SQLAlchemy to avoid model metadata issues
+if os.path.exists(database_path):
+    import sqlite3
+    migration_needed = False
+    try:
+        # Check if migration is needed using raw SQLite connection
+        conn = sqlite3.connect(database_path)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(user)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'push_notifications_enabled' not in columns:
+            migration_needed = True
+        conn.close()
+    except Exception as e:
+        logging.warning("Could not check migration status: %s", str(e))
+        # Assume migration is needed if we can't check
+        migration_needed = True
+    
+    if migration_needed:
+        logging.info("Running migration v1.9.0...")
+        try:
+            import os as os_module
+            # Read migration script
+            migration_dir = op.join(op.dirname(op.dirname(app_dir)), 'migrations', 'v1.9.0')
+            migration_file = op.join(migration_dir, 'push_notifications.sql')
+            
+            if not os_module.path.exists(migration_file):
+                logging.error("Migration script not found at %s", migration_file)
+                logging.error("Please run manually: python migrate.py v1.9.0")
+                raise Exception("Migration script not found")
+            
+            with open(migration_file, 'r', encoding='utf-8') as f:
+                script = f.read()
+            
+            # Execute migration using raw SQLite connection
+            conn = sqlite3.connect(database_path)
+            cursor = conn.cursor()
+            
+            script_statements = [s.strip() for s in script.split(";") if s.strip()]
+            for statement in script_statements:
+                if not statement:
+                    continue
+                try:
+                    cursor.execute(statement)
+                except sqlite3.OperationalError as e:
+                    error_msg = str(e).lower()
+                    if 'duplicate column' in error_msg or 'already exists' in error_msg:
+                        logging.warning("Column or table already exists, skipping: %s", statement[:50])
+                        continue
+                    # Re-raise if it's a different error
+                    logging.error("Migration error: %s", str(e))
+                    logging.error("Statement: %s", statement[:200])
+                    conn.close()
+                    raise
+            
+            conn.commit()
+            conn.close()
+            logging.info("Migration v1.9.0 completed successfully")
+            
+        except Exception as e:
+            logging.error("Error running migration v1.9.0: %s", str(e))
+            logging.error("Please run manually: python migrate.py v1.9.0")
+            raise  # Fail startup if migration fails
+
+# Now initialize SQLAlchemy (after migration is complete)
 if not os.path.exists(database_path):
     db.app = app
     with app.app_context():
@@ -111,6 +183,202 @@ def redirect_admin():
     if request.path.startswith('/admin'):
         return redirect(request.full_path.replace('/admin', ''))
 
+
+def get_vapid_public_key():
+    """
+    Get VAPID public key for frontend
+    """
+    return app.config.get('VAPID_PUBLIC_KEY')
+
+
+def get_vapid_private_key():
+    """
+    Get VAPID private key for backend
+    """
+    return app.config.get('VAPID_PRIVATE_KEY')
+
+
+def get_vapid_claim_email():
+    """
+    Get VAPID claim email
+    """
+    return app.config.get('VAPID_CLAIM_EMAIL')
+
+
+# Push notification API endpoints
+@app.route('/api/push/vapid-public-key', methods=['GET'])
+def vapid_public_key():
+    """
+    Return VAPID public key for frontend
+    """
+    try:
+        public_key = get_vapid_public_key()
+        if not public_key:
+            logging.error("VAPID_PUBLIC_KEY not configured in environment variables")
+            logging.error("Please set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables")
+            return jsonify({
+                'error': 'VAPID public key not configured',
+                'message': 'Las claves VAPID no están configuradas. Por favor, contacta al administrador.'
+            }), 500
+        logging.info("VAPID public key retrieved successfully (length: %s)", len(public_key))
+        return jsonify({'publicKey': public_key})
+    except Exception as e:
+        logging.exception("Error retrieving VAPID public key")
+        return jsonify({
+            'error': 'Error retrieving VAPID public key',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login.login_required
+@csrf.exempt
+def push_subscribe():
+    """
+    Register push subscription
+    Note: Exempted from CSRF as it's already protected by login_required
+    """
+    logging.info("=== Push subscription request received ===")
+    logging.info("User ID: %s, Email: %s", login.current_user.id, login.current_user.email)
+    
+    try:
+        # Log raw request data
+        raw_data = request.get_data(as_text=True)
+        logging.info("Raw request data: %s", raw_data[:500] if len(raw_data) > 500 else raw_data)
+        
+        data = request.get_json()
+        if not data:
+            logging.error("No JSON data in request")
+            return jsonify({'error': 'Invalid request - no JSON data'}), 400
+        
+        logging.info("Parsed JSON data keys: %s", list(data.keys()))
+        
+        endpoint = data.get('endpoint')
+        keys = data.get('keys', {})
+        p256dh = keys.get('p256dh') if keys else None
+        auth = keys.get('auth') if keys else None
+        
+        logging.info("Endpoint: %s", endpoint[:100] + '...' if endpoint and len(endpoint) > 100 else endpoint)
+        logging.info("Has p256dh: %s", bool(p256dh))
+        logging.info("Has auth: %s", bool(auth))
+        logging.info("p256dh length: %s", len(p256dh) if p256dh else 0)
+        logging.info("auth length: %s", len(auth) if auth else 0)
+        
+        if not endpoint:
+            logging.error("Missing endpoint")
+            return jsonify({'error': 'Missing required field: endpoint'}), 400
+        if not p256dh:
+            logging.error("Missing p256dh key")
+            return jsonify({'error': 'Missing required field: p256dh'}), 400
+        if not auth:
+            logging.error("Missing auth key")
+            return jsonify({'error': 'Missing required field: auth'}), 400
+        
+        # Check if subscription already exists
+        logging.info("Checking for existing subscription...")
+        existing = db.session.query(PushSubscription).filter_by(
+            user_id=login.current_user.id,
+            endpoint=endpoint
+        ).first()
+        
+        if existing:
+            logging.info("Updating existing subscription (ID: %s)", existing.id)
+            existing.p256dh = p256dh
+            existing.auth = auth
+        else:
+            logging.info("Creating new subscription...")
+            subscription = PushSubscription(
+                user_id=login.current_user.id,
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth
+            )
+            db.session.add(subscription)
+            logging.info("Subscription object created: %s", subscription)
+        
+        logging.info("Committing to database...")
+        db.session.commit()
+        logging.info("=== Push subscription successful ===")
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        logging.exception("=== Error subscribing to push notifications ===")
+        logging.error("Exception type: %s", type(e).__name__)
+        logging.error("Exception message: %s", str(e))
+        try:
+            db.session.rollback()
+            logging.info("Database session rolled back")
+        except Exception as rollback_error:
+            logging.error("Error during rollback: %s", str(rollback_error))
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+@login.login_required
+@csrf.exempt
+def push_unsubscribe():
+    """
+    Remove push subscription
+    Note: Exempted from CSRF as it's already protected by login_required
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid request'}), 400
+        
+        endpoint = data.get('endpoint')
+        if not endpoint:
+            return jsonify({'error': 'Missing endpoint'}), 400
+        
+        subscription = db.session.query(PushSubscription).filter_by(
+            user_id=login.current_user.id,
+            endpoint=endpoint
+        ).first()
+        
+        if subscription:
+            db.session.delete(subscription)
+            db.session.commit()
+            return jsonify({'success': True}), 200
+        else:
+            return jsonify({'error': 'Subscription not found'}), 404
+        
+    except Exception as e:
+        logging.exception("Error unsubscribing from push notifications")
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/wodbuster/sync', methods=['POST'])
+@login.login_required
+@csrf.exempt
+def wodbuster_sync():
+    """
+    Auto-sync WodBuster bookings endpoint (AJAX-compatible)
+    Note: Exempted from CSRF as it's already protected by login_required
+    """
+    try:
+        result = sync_wodbuster_bookings(login.current_user)
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'new': result['new'],
+                'updated': result['updated'],
+                'cancelled': result['cancelled'],
+                'message': f"Sincronización completada: {result['new']} nuevas, {result['updated']} actualizadas, {result['cancelled']} canceladas"
+            }), 200
+        else:
+            error_msg = "; ".join(result['errors'])
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            }), 500
+    except Exception as e:
+        logging.exception("Error in sync endpoint")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 _init_login()
 
 # Create admin
@@ -120,7 +388,7 @@ admin = Admin(app, name='WodBooker', index_view=MyAdminIndexView(url="/"),
 # Add views
 admin.add_view(BookingAdmin(Booking, db.session, 'Reservas'))
 admin.add_view(EventView(Event, db.session, 'Eventos'))
-admin.add_view(UserView(User, db.session, 'Usuarios'))
+admin.add_view(UserView(User, db.session, 'Preferencias'))
 
 # Start booking loop
 with app.app_context():
@@ -154,3 +422,9 @@ thread_mailer = threading.Thread(target=process_maling_queue,
                                  args=(app.app_context(),),
                                  daemon=True, name="mailer")
 thread_mailer.start()
+
+# Start notification scheduler loop
+thread_notification_scheduler = threading.Thread(target=_notification_scheduler_loop,
+                                                 args=(app.app_context(),),
+                                                 daemon=True, name="notification_scheduler")
+thread_notification_scheduler.start()

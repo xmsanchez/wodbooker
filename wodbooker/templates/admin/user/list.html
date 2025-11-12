@@ -1,8 +1,10 @@
 {% extends 'admin/model/list.html' %}
 
 {% block model_menu_bar %}
-  <div>
-    <p class="text-right"><a class="btn btn-primary" href="{{ get_url('.edit_view', url=return_url, id=data[0].id, modal=True) }}" role="button"><i class="bi bi-pencil-fill"></i> Preferencias Email</a></p>
+  <div style="margin-bottom: 20px;">
+    <a class="btn btn-primary" href="{{ get_url('.edit_view', id=data[0].id) }}" role="button">
+      <i class="bi bi-pencil-fill"></i> Editar Preferencias
+    </a>
   </div>
 {% endblock %}
 
@@ -23,6 +25,31 @@
   <p>
     <b>Recibir notificaciones de fallos en reservas</b><br/>
     {{ "Sí" if data[0].mail_permission_failure else "No" }}
+  </p>
+  
+  <hr style="margin: 20px 0; border-color: #e2e8f0;">
+  
+  <p>
+    <b>Notificaciones push habilitadas</b><br/>
+    {{ "Sí" if data[0].push_notifications_enabled else "No" }}
+  </p>
+  
+  {% if data[0].push_notifications_enabled %}
+  <p>
+    <b>Recordatorios activos:</b><br/>
+    {% if not data[0].push_reminder_1h and not data[0].push_reminder_30m and not data[0].push_reminder_15m %}
+      Ninguno
+    {% else %}
+      {% if data[0].push_reminder_1h %}1 hora{% if data[0].push_reminder_30m or data[0].push_reminder_15m %}, {% endif %}{% endif %}
+      {% if data[0].push_reminder_30m %}30 minutos{% if data[0].push_reminder_15m %}, {% endif %}{% endif %}
+      {% if data[0].push_reminder_15m %}15 minutos{% endif %}
+    {% endif %}
+  </p>
+  {% endif %}
+  
+  <p>
+    <b>Sincronización automática al cargar la página</b><br/>
+    {{ "Sí" if data[0].wodbuster_autosync_enabled else "No" }}
   </p>
 
 </div>
