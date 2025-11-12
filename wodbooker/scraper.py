@@ -345,6 +345,59 @@ class Scraper():
         else:
             raise InvalidWodBusterResponse(_MORE_THAN_ONE_BOX_MESSAGE)
 
+    def get_athlete_id(self, box_url: str) -> tuple:
+        """
+        Extract athlete ID and profile picture URL from the user preferences page.
+        :param box_url: The WodBuster box URL (e.g., https://mayantibox.wodbuster.com)
+        :return: A tuple containing (athlete_id, profile_picture_url)
+                 Returns (None, None) if extraction fails
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid
+        :raises RequestException: If a network error occurs
+        """
+        self.login()
+        preferences_url = f"{box_url}/user/preferences.aspx"
+        try:
+            preferences_request = self._session.get(preferences_url, headers=_HEADERS, allow_redirects=True, timeout=10)
+            preferences_request.raise_for_status()
+            
+            soup = BeautifulSoup(preferences_request.content, 'lxml')
+            
+            # Look for profile picture in img tags
+            # Pattern: https://cdn.wodbuster.com/static/atletas/{a}/{b}/{c}/{athlete-id}.jpg
+            img_tags = soup.find_all('img', src=re.compile(r'cdn\.wodbuster\.com/static/atletas/'))
+            
+            for img in img_tags:
+                src = img.get('src', '')
+                if 'cdn.wodbuster.com/static/atletas/' in src:
+                    # Extract athlete ID from URL
+                    # Pattern: /static/atletas/{a}/{b}/{c}/{athlete-id}.jpg
+                    match = re.search(r'/static/atletas/[^/]+/[^/]+/[^/]+/([^/]+)\.jpg', src)
+                    if match:
+                        athlete_id = match.group(1)
+                        # Ensure full URL
+                        if src.startswith('http'):
+                            profile_picture_url = src
+                        elif src.startswith('//'):
+                            profile_picture_url = 'https:' + src
+                        elif src.startswith('/'):
+                            profile_picture_url = 'https://cdn.wodbuster.com' + src
+                        else:
+                            profile_picture_url = 'https://cdn.wodbuster.com/' + src
+                        
+                        logging.info("Extracted athlete ID: %s for user %s", athlete_id, self._user)
+                        return (athlete_id, profile_picture_url)
+            
+            logging.warning("Could not find profile picture URL for user %s", self._user)
+            return (None, None)
+            
+        except requests.exceptions.RequestException as e:
+            logging.exception("Error fetching preferences page for user %s", self._user)
+            raise InvalidWodBusterResponse('Error fetching user preferences') from e
+        except Exception as e:
+            logging.exception("Unexpected error extracting athlete ID for user %s", self._user)
+            return (None, None)
+
 
 __SCRAPERS = {}
 
