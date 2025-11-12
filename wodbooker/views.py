@@ -62,14 +62,40 @@ class LoginForm(FlaskForm):
             existing_user.cookie = self._scraper.get_cookies()
             existing_user.force_login = False
             db.session.commit()
-            return existing_user
+            user = existing_user
         else:
             user = User()
             user.email = self.email.data
             user.cookie = self._scraper.get_cookies()
             db.session.add(user)
             db.session.commit()
-            return user
+        
+        # Try to extract athlete ID and profile picture if not already set
+        if not user.athlete_id or not user.profile_picture_url:
+            try:
+                # Try to get box URL from existing bookings first
+                box_url = None
+                last_booking = db.session.query(Booking).filter_by(user_id=user.id).order_by(Booking.id.desc()).first()
+                if last_booking and last_booking.url:
+                    box_url = last_booking.url
+                else:
+                    # Try to get box URL directly (may fail if user has multiple boxes)
+                    try:
+                        box_url = self._scraper.get_box_url()
+                    except Exception:
+                        logging.warning("Could not get box URL for user %s - user may have multiple boxes", user.email)
+                
+                if box_url:
+                    athlete_id, profile_picture_url = self._scraper.get_athlete_id(box_url)
+                    if athlete_id:
+                        user.athlete_id = athlete_id
+                    if profile_picture_url:
+                        user.profile_picture_url = profile_picture_url
+                    db.session.commit()
+            except Exception as e:
+                logging.warning("Could not extract athlete ID/profile picture for user %s: %s", user.email, str(e))
+        
+        return user
 
 
 # Create customized index view class that handles login & registration

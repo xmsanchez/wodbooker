@@ -243,6 +243,13 @@
     .btn-text-white {
       color: white !important;
       font-weight: 500;
+      display: flex;
+      align-items: center;
+    }
+    
+    .btn-text-white img {
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .dropdown-menu {
@@ -308,6 +315,11 @@
   {% if current_user.is_authenticated %}
     <div class="btn-group pull-right dropdown">
       <button class="btn btn-text-white dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        {% if current_user.profile_picture_url %}
+          <img src="{{ current_user.profile_picture_url }}" alt="Profile" style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; object-fit: cover; vertical-align: middle;">
+        {% else %}
+          <i class="bi bi-person-circle" style="font-size: 1.2rem; margin-right: 8px;"></i>
+        {% endif %}
         {{ current_user.email}}
       </button>
       <ul class="dropdown-menu">

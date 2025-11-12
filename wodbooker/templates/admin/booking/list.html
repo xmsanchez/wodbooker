@@ -16,8 +16,17 @@
       <p>Las reservas marcadas con el símbolo <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i> están desactivadas porque se produjo algún error con las mismas. Para que vuelvan a estar activas, revisa el estado de las mismas y corrige los errores. Si el problema es derivado de que la sesión caducó, simplemente desactiva la reserva y vuelve a activarla.</p>
     </div>
   {% endif %}
-  <div>
-    <p class="text-right"><a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a></p>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex align-items-center">
+      {% if current_user.profile_picture_url %}
+        <img src="{{ current_user.profile_picture_url }}" alt="Profile" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+      {% else %}
+        <i class="bi bi-person-circle" style="font-size: 48px; color: #64748b;"></i>
+      {% endif %}
+    </div>
+    <div>
+      <a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a>
+    </div>
   </div>
 {% endblock %}
 {% block model_list_table %}
