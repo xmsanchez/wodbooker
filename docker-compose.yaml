@@ -14,6 +14,9 @@ services:
       - EMAIL_HOST=${EMAIL_HOST}
       - PRIORITY_USERS_EMAILS=${PRIORITY_USERS_EMAILS}
       - BOOKING_WHITELIST_EMAILS=${BOOKING_WHITELIST_EMAILS}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_CLAIM_EMAIL=${VAPID_CLAIM_EMAIL:-mailto:admin@example.com}
     volumes:
       - .:/app
     networks:

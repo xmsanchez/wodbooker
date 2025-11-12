@@ -2,3 +2,283 @@
 
 {% block navlinks %}
 {% endblock %}
+
+{% block form %}
+  {{ super() }}
+{% endblock %}
+
+{% block form_fields %}
+  <div class="container-fluid">
+    <!-- Preferencias Email -->
+    <div class="card mb-3" style="border-left: 4px solid #2563eb;">
+      <div class="card-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
+        <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Preferencias Email</h5>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <div class="form-check form-switch">
+            {{ form.mail_permission_success(class="form-check-input") }}
+            <label class="form-check-label" for="{{ form.mail_permission_success.id }}">
+              {{ form.mail_permission_success.label.text }}
+            </label>
+          </div>
+          {% if form.mail_permission_success.errors %}
+            <div class="text-danger">
+              {% for error in form.mail_permission_success.errors %}
+                <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+        
+        <div class="form-group mt-3">
+          <div class="form-check form-switch">
+            {{ form.mail_permission_failure(class="form-check-input") }}
+            <label class="form-check-label" for="{{ form.mail_permission_failure.id }}">
+              {{ form.mail_permission_failure.label.text }}
+            </label>
+          </div>
+          {% if form.mail_permission_failure.errors %}
+            <div class="text-danger">
+              {% for error in form.mail_permission_failure.errors %}
+                <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Preferencias Notificaciones -->
+    <div class="card mb-3" style="border-left: 4px solid #059669;">
+      <div class="card-header" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);">
+        <h5 class="mb-0"><i class="bi bi-bell me-2"></i>Preferencias Notificaciones</h5>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <div class="form-check form-switch">
+            {{ form.push_notifications_enabled(class="form-check-input") }}
+            <label class="form-check-label" for="{{ form.push_notifications_enabled.id }}">
+              {{ form.push_notifications_enabled.label.text }}
+            </label>
+          </div>
+          {% if form.push_notifications_enabled.errors %}
+            <div class="text-danger">
+              {% for error in form.push_notifications_enabled.errors %}
+                <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+        
+        <div class="form-group mt-3">
+          <label class="form-label">Recordatorios antes de la clase:</label>
+          <div class="ms-3">
+            <div class="form-check form-switch">
+              {{ form.push_reminder_1h(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.push_reminder_1h.id }}">
+                {{ form.push_reminder_1h.label.text }}
+              </label>
+            </div>
+            {% if form.push_reminder_1h.errors %}
+              <div class="text-danger">
+                {% for error in form.push_reminder_1h.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+            
+            <div class="form-check form-switch mt-2">
+              {{ form.push_reminder_30m(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.push_reminder_30m.id }}">
+                {{ form.push_reminder_30m.label.text }}
+              </label>
+            </div>
+            {% if form.push_reminder_30m.errors %}
+              <div class="text-danger">
+                {% for error in form.push_reminder_30m.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+            
+            <div class="form-check form-switch mt-2">
+              {{ form.push_reminder_15m(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.push_reminder_15m.id }}">
+                {{ form.push_reminder_15m.label.text }}
+              </label>
+            </div>
+            {% if form.push_reminder_15m.errors %}
+              <div class="text-danger">
+                {% for error in form.push_reminder_15m.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Preferencias Sincronización -->
+    <div class="card mb-3" style="border-left: 4px solid #f59e0b;">
+      <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+        <h5 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h5>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <div class="form-check form-switch">
+            {{ form.wodbuster_autosync_enabled(class="form-check-input") }}
+            <label class="form-check-label" for="{{ form.wodbuster_autosync_enabled.id }}">
+              {{ form.wodbuster_autosync_enabled.label.text }}
+            </label>
+          </div>
+          {% if form.wodbuster_autosync_enabled.errors %}
+            <div class="text-danger">
+              {% for error in form.wodbuster_autosync_enabled.errors %}
+                <small>{{ error }}</small>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+  
+  <div class="container-fluid" style="margin-top: 20px;">
+    <div class="card">
+      <div class="card-header">
+        <h4>Notificaciones Push</h4>
+      </div>
+      <div class="card-body">
+        <p>Las notificaciones push te permiten recibir recordatorios antes de tus clases.</p>
+        
+        <div id="push-notification-status" style="margin-bottom: 15px;">
+          <p><strong>Estado de suscripción:</strong> <span id="subscription-status">Comprobando...</span></p>
+        </div>
+        
+        <div id="push-notification-actions">
+          <button id="subscribe-btn" class="btn btn-primary" style="display: none;">
+            <i class="bi bi-bell"></i> Activar Notificaciones Push
+          </button>
+          <button id="unsubscribe-btn" class="btn btn-secondary" style="display: none;">
+            <i class="bi bi-bell-slash"></i> Desactivar Notificaciones Push
+          </button>
+        </div>
+        
+        <div id="push-error" class="alert alert-danger" style="display: none; margin-top: 15px;"></div>
+        <div id="push-success" class="alert alert-success" style="display: none; margin-top: 15px;"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    (async function() {
+      // Check subscription status
+      async function updateSubscriptionStatus() {
+        const statusEl = document.getElementById('subscription-status');
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        const unsubscribeBtn = document.getElementById('unsubscribe-btn');
+        
+        // Wait a bit for PushNotifications to be available
+        if (!window.PushNotifications) {
+          setTimeout(updateSubscriptionStatus, 100);
+          return;
+        }
+        
+        // Check if push notifications are supported
+        if (!window.PushNotifications.isSupported || !window.PushNotifications.isSupported()) {
+          statusEl.textContent = 'No disponible en este navegador';
+          statusEl.style.color = '#6b7280';
+          subscribeBtn.style.display = 'none';
+          unsubscribeBtn.style.display = 'none';
+          return;
+        }
+        
+        try {
+          const isSubscribed = await window.PushNotifications.isSubscribed();
+          
+          if (isSubscribed) {
+            statusEl.textContent = 'Activo';
+            statusEl.style.color = '#059669';
+            subscribeBtn.style.display = 'none';
+            unsubscribeBtn.style.display = 'inline-block';
+          } else {
+            statusEl.textContent = 'No activo';
+            statusEl.style.color = '#dc2626';
+            subscribeBtn.style.display = 'inline-block';
+            unsubscribeBtn.style.display = 'none';
+          }
+        } catch (error) {
+          console.error('Error checking subscription status:', error);
+          statusEl.textContent = 'Error al comprobar el estado';
+          statusEl.style.color = '#dc2626';
+          subscribeBtn.style.display = 'none';
+          unsubscribeBtn.style.display = 'none';
+        }
+      }
+      
+      // Subscribe button handler
+      document.getElementById('subscribe-btn').addEventListener('click', async function() {
+        const errorEl = document.getElementById('push-error');
+        const successEl = document.getElementById('push-success');
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        subscribeBtn.disabled = true;
+        subscribeBtn.textContent = 'Activando...';
+        
+        try {
+          const result = await window.PushNotifications.subscribe();
+          if (result) {
+            successEl.textContent = 'Notificaciones push activadas correctamente';
+            successEl.style.display = 'block';
+            await updateSubscriptionStatus();
+          } else {
+            errorEl.textContent = 'No se pudo activar las notificaciones push. Asegúrate de permitir las notificaciones en tu navegador.';
+            errorEl.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Subscription error:', error);
+          errorEl.textContent = 'Error: ' + (error.message || 'No se pudo activar las notificaciones push. Revisa la consola para más detalles.');
+          errorEl.style.display = 'block';
+        } finally {
+          subscribeBtn.disabled = false;
+          subscribeBtn.innerHTML = '<i class="bi bi-bell"></i> Activar Notificaciones Push';
+        }
+      });
+      
+      // Unsubscribe button handler
+      document.getElementById('unsubscribe-btn').addEventListener('click', async function() {
+        const errorEl = document.getElementById('push-error');
+        const successEl = document.getElementById('push-success');
+        
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        
+        try {
+          const result = await window.PushNotifications.unsubscribe();
+          if (result) {
+            successEl.textContent = 'Notificaciones push desactivadas correctamente';
+            successEl.style.display = 'block';
+            await updateSubscriptionStatus();
+          } else {
+            errorEl.textContent = 'No se pudo desactivar las notificaciones push.';
+            errorEl.style.display = 'block';
+          }
+        } catch (error) {
+          errorEl.textContent = 'Error: ' + error.message;
+          errorEl.style.display = 'block';
+        }
+      });
+      
+      // Update status on page load
+      await updateSubscriptionStatus();
+    })();
+  </script>
+{% endblock %}

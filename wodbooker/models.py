@@ -40,6 +40,17 @@ class User(db.Model):
     mail_permission_failure = db.Column(db.Boolean, default=True)
     athlete_id = db.Column(db.String(128), nullable=True)
     profile_picture_url = db.Column(db.String(512), nullable=True)
+    wodbuster_bookings = db.relationship('WodBusterBooking', backref='user', lazy=True, cascade="all, delete-orphan")
+    
+    # Push notification settings
+    push_notifications_enabled = db.Column(db.Boolean, default=False)
+    push_reminder_1h = db.Column(db.Boolean, default=False)
+    push_reminder_30m = db.Column(db.Boolean, default=False)
+    push_reminder_15m = db.Column(db.Boolean, default=False)
+    wodbuster_autosync_enabled = db.Column(db.Boolean, default=False)
+    
+    # Push notification subscriptions
+    push_subscriptions = db.relationship('PushSubscription', backref='user', lazy=True, cascade="all, delete-orphan")
 
     # Flask-Login integration
     # NOTE: is_authenticated, is_active, and is_anonymous
@@ -62,3 +73,50 @@ class User(db.Model):
     # Required for administrative interface
     def __unicode__(self):
         return self.email
+
+
+class WodBusterBooking(db.Model):
+    __tablename__ = 'wodbuster_booking'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    class_id = db.Column(db.Integer, nullable=False)
+    class_date = db.Column(db.Date, nullable=False, index=True)
+    class_time = db.Column(db.Time, nullable=False)
+    class_name = db.Column(db.String(128), nullable=True)
+    class_type = db.Column(db.String(32), nullable=True)  # 'wod', 'openbox', etc.
+    box_url = db.Column(db.String(128), nullable=False)
+    fetched_at = db.Column(db.DateTime, default=datetime.now)
+    is_cancelled = db.Column(db.Boolean, default=False)
+
+    # Unique constraint to prevent duplicates
+    __table_args__ = (db.UniqueConstraint('user_id', 'class_id', 'class_date', name='_user_class_date_uc'),)
+
+    def __str__(self):
+        return f"{self.class_date.strftime('%d/%m/%Y')} {self.class_time.strftime('%H:%M')} - {self.class_name or 'N/A'}"
+    
+    # Relationship for notification tracking
+    notifications_sent = db.relationship('NotificationSent', backref='wodbuster_booking', lazy=True, cascade="all, delete-orphan")
+
+
+class PushSubscription(db.Model):
+    __tablename__ = 'push_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    endpoint = db.Column(db.String(512), nullable=False)
+    p256dh = db.Column(db.String(256), nullable=False)
+    auth = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    
+    # Unique constraint to prevent duplicate subscriptions
+    __table_args__ = (db.UniqueConstraint('user_id', 'endpoint', name='_user_endpoint_uc'),)
+
+
+class NotificationSent(db.Model):
+    __tablename__ = 'notification_sent'
+    id = db.Column(db.Integer, primary_key=True)
+    wodbuster_booking_id = db.Column(db.Integer, db.ForeignKey('wodbuster_booking.id'), nullable=False, index=True)
+    reminder_minutes = db.Column(db.Integer, nullable=False)  # 60, 30, or 15
+    sent_at = db.Column(db.DateTime, default=datetime.now)
+    
+    # Unique constraint to prevent duplicate notifications
+    __table_args__ = (db.UniqueConstraint('wodbuster_booking_id', 'reminder_minutes', name='_booking_reminder_uc'),)

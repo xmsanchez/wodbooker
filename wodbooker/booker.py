@@ -19,7 +19,7 @@ from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
-from .models import db, Booking, Event
+from .models import db, Booking, Event, User, WodBusterBooking
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
@@ -493,3 +493,135 @@ def is_booking_running(booking: Booking) -> bool:
     :return: True if the booking is running, False otherwise
     """
     return booking.id in __CURRENT_THREADS and __CURRENT_THREADS[booking.id].is_alive()
+
+
+def sync_wodbuster_bookings(user: User) -> dict:
+    """
+    Sync WodBuster bookings for a user for the current week (Monday to Sunday).
+    :param user: The user to sync bookings for
+    :return: Dictionary with sync results: {'success': bool, 'new': int, 'updated': int, 'cancelled': int, 'errors': list}
+    """
+    if not user.athlete_id:
+        logging.warning("Cannot sync bookings for user %s: no athlete_id", user.email)
+        return {'success': False, 'new': 0, 'updated': 0, 'cancelled': 0, 'errors': ['No athlete_id set']}
+    
+    # Get box URL from user's most recent booking
+    box_url = None
+    last_booking = db.session.query(Booking).filter_by(user_id=user.id).order_by(Booking.id.desc()).first()
+    if last_booking and last_booking.url:
+        box_url = last_booking.url
+    else:
+        # Try to get box URL directly
+        try:
+            scraper = get_scraper(user.email, user.cookie)
+            box_url = scraper.get_box_url()
+        except Exception as e:
+            logging.warning("Could not get box URL for user %s: %s", user.email, str(e))
+            return {'success': False, 'new': 0, 'updated': 0, 'cancelled': 0, 'errors': [f'Could not get box URL: {str(e)}']}
+    
+    if not box_url:
+        return {'success': False, 'new': 0, 'updated': 0, 'cancelled': 0, 'errors': ['No box URL available']}
+    
+    try:
+        scraper = get_scraper(user.email, user.cookie)
+        today = date.today()
+        
+        # Calculate current week: Monday to Sunday
+        # Get Monday of current week
+        days_since_monday = today.weekday()  # 0 = Monday, 6 = Sunday
+        monday = today - timedelta(days=days_since_monday)
+        # Get Sunday of current week
+        sunday = monday + timedelta(days=6)
+        
+        start_date = monday
+        end_date = sunday
+        
+        new_count = 0
+        updated_count = 0
+        cancelled_count = 0
+        errors = []
+        
+        current_date = start_date
+        while current_date <= end_date:
+            try:
+                booked_classes = scraper.get_user_booked_classes(box_url, user.athlete_id, current_date)
+                
+                # Get existing bookings for this date
+                existing_bookings = {
+                    wb.class_id: wb 
+                    for wb in db.session.query(WodBusterBooking).filter_by(
+                        user_id=user.id,
+                        class_date=current_date,
+                        is_cancelled=False
+                    ).all()
+                }
+                
+                # Track which bookings we found in the API response
+                found_class_ids = set()
+                
+                for class_info in booked_classes:
+                    class_id = class_info['class_id']
+                    class_time = class_info['time']
+                    found_class_ids.add(class_id)
+                    
+                    # Check if booking already exists
+                    if class_id in existing_bookings:
+                        # Update existing booking
+                        existing = existing_bookings[class_id]
+                        existing.class_name = class_info.get('class_name')
+                        existing.class_type = class_info.get('class_type')
+                        existing.fetched_at = datetime.now()
+                        existing.is_cancelled = False
+                        updated_count += 1
+                    else:
+                        # Create new booking
+                        new_booking = WodBusterBooking(
+                            user_id=user.id,
+                            class_id=class_id,
+                            class_date=current_date,
+                            class_time=class_time,
+                            class_name=class_info.get('class_name'),
+                            class_type=class_info.get('class_type'),
+                            box_url=box_url,
+                            fetched_at=datetime.now(),
+                            is_cancelled=False
+                        )
+                        db.session.add(new_booking)
+                        new_count += 1
+                
+                # Mark bookings as cancelled if they're no longer in the API response
+                for class_id, existing_booking in existing_bookings.items():
+                    if class_id not in found_class_ids:
+                        existing_booking.is_cancelled = True
+                        existing_booking.fetched_at = datetime.now()
+                        cancelled_count += 1
+                
+            except Exception as e:
+                error_msg = f"Error syncing date {current_date}: {str(e)}"
+                logging.exception(error_msg)
+                errors.append(error_msg)
+            
+            current_date += timedelta(days=1)
+        
+        db.session.commit()
+        logging.info("Sync completed for user %s: %d new, %d updated, %d cancelled", 
+                    user.email, new_count, updated_count, cancelled_count)
+        
+        return {
+            'success': True,
+            'new': new_count,
+            'updated': updated_count,
+            'cancelled': cancelled_count,
+            'errors': errors
+        }
+        
+    except Exception as e:
+        logging.exception("Error syncing WodBuster bookings for user %s", user.email)
+        db.session.rollback()
+        return {
+            'success': False,
+            'new': 0,
+            'updated': 0,
+            'cancelled': 0,
+            'errors': [f'Sync failed: {str(e)}']
+        }

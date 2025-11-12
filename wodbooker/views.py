@@ -16,8 +16,8 @@ from sqlalchemy import and_
 from flask_wtf import FlaskForm
 from flask_wtf import Recaptcha
 from flask_wtf.recaptcha import RecaptchaField
-from .models import User, db, Booking
-from .booker import start_booking_loop, stop_booking_loop, is_booking_running
+from .models import User, db, Booking, WodBusterBooking
+from .booker import start_booking_loop, stop_booking_loop, is_booking_running, sync_wodbuster_bookings
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
 from .constants import EventMessage, DAYS_OF_WEEK, DEFAULT_OFFSETS_BY_DAY
@@ -220,6 +220,26 @@ class BookingAdmin(sqla.ModelView):
         TemplateLinkRowAction("row_actions.swtich_active", "Swtich Active"),
     ]
 
+    @expose("/sync-wodbuster-bookings", methods=("POST",))
+    def sync_wodbuster_bookings_endpoint(self):
+        """Manual sync endpoint for WodBuster bookings"""
+        if not login.current_user.is_authenticated:
+            flash("Debes iniciar sesión para sincronizar reservas", "error")
+            return redirect(url_for('admin.login_view'))
+        
+        try:
+            result = sync_wodbuster_bookings(login.current_user)
+            if result['success']:
+                flash(f"Sincronización completada: {result['new']} nuevas, {result['updated']} actualizadas, {result['cancelled']} canceladas", "success")
+            else:
+                error_msg = "; ".join(result['errors'])
+                flash(f"Error en la sincronización: {error_msg}", "error")
+        except Exception as e:
+            logging.exception("Error in sync endpoint")
+            flash(f"Error al sincronizar: {str(e)}", "error")
+        
+        return redirect(url_for('booking.index_view'))
+
     @expose("/active", methods=("POST",))
     def switch_active(self):
         """
@@ -282,6 +302,26 @@ class BookingAdmin(sqla.ModelView):
         # Pass DAYS_OF_WEEK and weekday statistics to template context
         kwargs['DAYS_OF_WEEK'] = DAYS_OF_WEEK
         kwargs['weekday_stats'] = getattr(self, '_weekday_stats', {})
+        
+        # Fetch WodBuster bookings for the current week only
+        wodbuster_bookings = []
+        if login.current_user.is_authenticated:
+            from datetime import date, timedelta
+            today = date.today()
+            # Calculate current week: Monday to Sunday
+            days_since_monday = today.weekday()  # 0 = Monday, 6 = Sunday
+            monday = today - timedelta(days=days_since_monday)
+            sunday = monday + timedelta(days=6)
+            
+            # Get all WodBuster bookings for current week
+            wodbuster_bookings = db.session.query(WodBusterBooking).filter(
+                WodBusterBooking.user_id == login.current_user.id,
+                WodBusterBooking.is_cancelled == False,
+                WodBusterBooking.class_date >= monday,
+                WodBusterBooking.class_date <= sunday
+            ).order_by(WodBusterBooking.class_date, WodBusterBooking.class_time).all()
+        
+        kwargs['wodbuster_bookings'] = wodbuster_bookings
         return super().render(template, **kwargs)
 
     @staticmethod
@@ -431,6 +471,13 @@ class UserForm(form.Form):
 
     mail_permission_success = fields.BooleanField('Recibir notificaciones de reservas exitosas')
     mail_permission_failure = fields.BooleanField('Recibir notificaciones de fallos en reservas')
+    
+    # Push notification settings
+    push_notifications_enabled = fields.BooleanField('Habilitar notificaciones push')
+    push_reminder_1h = fields.BooleanField('Recordatorio 1 hora antes')
+    push_reminder_30m = fields.BooleanField('Recordatorio 30 minutos antes')
+    push_reminder_15m = fields.BooleanField('Recordatorio 15 minutos antes')
+    wodbuster_autosync_enabled = fields.BooleanField('Sincronización automática al cargar la página')
 
 
 class UserView(sqla.ModelView):
@@ -449,7 +496,7 @@ class UserView(sqla.ModelView):
     )
 
     def is_visible(self):
-        return False
+        return True
 
     def get_query(self):
         query = super().get_query().filter(User.id==login.current_user.id)

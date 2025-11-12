@@ -24,7 +24,17 @@
         <i class="bi bi-person-circle" style="font-size: 48px; color: #64748b;"></i>
       {% endif %}
     </div>
-    <div>
+    <div class="d-flex gap-2">
+      {% if current_user.athlete_id %}
+        <form method="POST" action="{{ url_for('booking.sync_wodbuster_bookings_endpoint') }}" style="display: inline;">
+          {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          {% endif %}
+          <button type="submit" class="btn btn-outline-secondary btn-sm" title="Sincronizar reservas de WodBuster">
+            <i class="bi bi-arrow-clockwise"></i> Sync WodBuster
+          </button>
+        </form>
+      {% endif %}
       <a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a>
     </div>
   </div>
@@ -130,5 +140,98 @@
         </div>
     {% endfor %}
     </div>
-  {% endif %}  
+  {% endif %}
+  
+  {% if wodbuster_bookings %}
+    <div class="mt-4">
+      <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem;">
+        <i class="bi bi-calendar-check me-2"></i>Reservas de WodBuster (Semana actual)
+      </h3>
+      <div class="accordion" id="wodbusterBookingsAccordion">
+        {% set wb_date_ns = namespace(current=None) %}
+        {% for wb_booking in wodbuster_bookings %}
+          {% set wb_date = wb_booking.class_date %}
+          {% set wb_dow = wb_date.weekday() %}
+          {% if wb_date_ns.current != wb_date %}
+            {% set wb_date_ns.current = wb_date %}
+            <div class="weekday-header" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border: 1px solid #93c5fd; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #1e40af; font-size: 1rem;">
+              <span>{{ DAYS_OF_WEEK[wb_dow] }} {{ wb_date.strftime('%d/%m/%Y') }}</span>
+            </div>
+          {% endif %}
+          {% set is_same_date_as_prev = loop.index0 > 0 and wodbuster_bookings[loop.index0 - 1].class_date == wb_date %}
+          <div class="card" style="margin-bottom: {% if is_same_date_as_prev %}0.25rem{% else %}0.5rem{% endif %}; border-left: 4px solid #3b82f6;">
+            <div class="card-header d-flex justify-content-between" id="headingWB{{wb_booking.id}}" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
+              <h2 class="mb-0 mr-auto" style="margin-bottom: 0;">
+                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseWB{{wb_booking.id}}" aria-expanded="false" aria-controls="collapseWB{{wb_booking.id}}" style="padding: 0; text-decoration: none;">
+                  <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">
+                    {{ wb_booking.class_time.strftime('%H:%M') }}
+                    <span class="badge badge-info" style="background-color: #3b82f6; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem;">WodBuster</span>
+                  </h4>
+                  <p style="margin-bottom: 0; font-size: 0.875rem; color: #64748b;">
+                    {{ wb_booking.class_name }} {{ wb_booking.class_type or 'N/A' }}
+                  </p>
+                </button>
+              </h2>
+            </div>
+            <div id="collapseWB{{wb_booking.id}}" class="collapse" aria-labelledby="headingWB{{wb_booking.id}}" data-parent="#wodbusterBookingsAccordion">
+              <div class="card-body" style="padding: 0.75rem 1rem;">
+                <div class="container-fluid" style="padding: 0;">
+                  <p style="margin-bottom: 0.5rem;">
+                    <b>Fecha</b><br/>
+                    {{ wb_booking.class_date.strftime('%d/%m/%Y') }}
+                  </p>
+                  <p style="margin-bottom: 0.5rem;">
+                    <b>Hora</b><br/>
+                    {{ wb_booking.class_time.strftime('%H:%M') }}
+                  </p>
+                  <p style="margin-bottom: 0.5rem;">
+                    <b>Clase</b><br/>
+                    {{ wb_booking.class_name }}
+                  </p>
+                  <p style="margin-bottom: 0.5rem;">
+                    <b>Tipo</b><br/>
+                    {{ wb_booking.class_type or 'N/A' }}
+                  </p>
+                  <p style="margin-bottom: 0.5rem;">
+                    <b>Box</b><br/>
+                    <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ wb_booking.box_url }}" target="_blank">{{ wb_booking.box_url }}</a>
+                  </p>
+                  <p style="margin-bottom: 0;">
+                    <b>Sincronizado</b><br/>
+                    {{ wb_booking.fetched_at.strftime('%d/%m/%Y %H:%M') if wb_booking.fetched_at else 'N/A' }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  
+  <!-- Auto-sync loading indicator -->
+  <div id="autosync-loading" style="display: none; text-align: center; padding: 10px;">
+    <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Sincronizando reservas de WodBuster...
+  </div>
+  
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  
+  <script>
+    // Set auto-sync enabled flag for autosync.js
+    {% if current_user.is_authenticated and current_user.wodbuster_autosync_enabled %}
+      window.AUTOSYNC_ENABLED = true;
+    {% else %}
+      window.AUTOSYNC_ENABLED = false;
+    {% endif %}
+    
+    // Set CSRF token for AJAX requests
+    {% if csrf_token %}
+      window.CSRF_TOKEN = '{{ csrf_token() }}';
+    {% endif %}
+  </script>
 {% endblock %}

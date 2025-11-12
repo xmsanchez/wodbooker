@@ -13,3 +13,4 @@ flask-babel==4.0.0
 func-timeout==4.3.5
 EmailMessage==0.2.1
 cloudscraper==1.2.71
+pywebpush==1.14.0

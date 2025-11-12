@@ -50,14 +50,24 @@ def execute_migration(_migrations):
         logging.info("Executing migration script %s", name)
         script_statements = filter(lambda x: x, script.split(";"))
         for statement in script_statements:
+            statement = statement.strip()
+            if not statement:
+                continue
             try:
                 conn.execute(text(statement))
             except OperationalError as e:
+                # Check if it's a "duplicate column" error, which is OK
+                error_msg = str(e).lower()
+                if 'duplicate column' in error_msg or 'already exists' in error_msg:
+                    logging.warning("Column or table already exists, skipping: %s", statement[:50])
+                    continue
                 logging.error("Error executing migration %s: %s", name, e)
+                logging.error("Statement was: %s", statement[:200])
                 conn.close()
                 return
             except SQLAlchemyError as e:
                 logging.error("Error executing migration %s: %s", name, e)
+                logging.error("Statement was: %s", statement[:200])
                 conn.close()
                 return
 
