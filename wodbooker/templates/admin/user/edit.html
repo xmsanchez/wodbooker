@@ -170,6 +170,16 @@
           </button>
         </div>
         
+        <div id="push-test-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+          <h5 style="margin-bottom: 15px;">Probar Notificaciones</h5>
+          <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">
+            Envía una notificación de prueba para verificar que las notificaciones push funcionan correctamente. La notificación se enviará en 5 segundos.
+          </p>
+          <button id="test-notification-btn" class="btn btn-info" style="display: none;">
+            <i class="bi bi-send"></i> Enviar Notificación de Prueba
+          </button>
+        </div>
+        
         <div id="push-error" class="alert alert-danger" style="display: none; margin-top: 15px;"></div>
         <div id="push-success" class="alert alert-success" style="display: none; margin-top: 15px;"></div>
       </div>
@@ -238,7 +248,7 @@
           if (result) {
             successEl.textContent = 'Notificaciones push activadas correctamente';
             successEl.style.display = 'block';
-            await updateSubscriptionStatus();
+            await updateStatusAndTestButton();
           } else {
             errorEl.textContent = 'No se pudo activar las notificaciones push. Asegúrate de permitir las notificaciones en tu navegador.';
             errorEl.style.display = 'block';
@@ -266,7 +276,7 @@
           if (result) {
             successEl.textContent = 'Notificaciones push desactivadas correctamente';
             successEl.style.display = 'block';
-            await updateSubscriptionStatus();
+            await updateStatusAndTestButton();
           } else {
             errorEl.textContent = 'No se pudo desactivar las notificaciones push.';
             errorEl.style.display = 'block';
@@ -277,8 +287,85 @@
         }
       });
       
+      // Show/hide test button based on subscription status
+      async function updateTestButtonVisibility() {
+        const testBtn = document.getElementById('test-notification-btn');
+        const statusEl = document.getElementById('subscription-status');
+        
+        // Wait a bit for PushNotifications to be available
+        if (!window.PushNotifications) {
+          setTimeout(updateTestButtonVisibility, 100);
+          return;
+        }
+        
+        // Check if push notifications are supported
+        if (!window.PushNotifications.isSupported || !window.PushNotifications.isSupported()) {
+          testBtn.style.display = 'none';
+          return;
+        }
+        
+        try {
+          const isSubscribed = await window.PushNotifications.isSubscribed();
+          // Show test button only if subscribed and push notifications are enabled
+          // We'll check the status text to see if it's active
+          if (isSubscribed && statusEl.textContent === 'Activo') {
+            testBtn.style.display = 'inline-block';
+          } else {
+            testBtn.style.display = 'none';
+          }
+        } catch (error) {
+          console.error('Error checking subscription status for test button:', error);
+          testBtn.style.display = 'none';
+        }
+      }
+      
+      // Wrapper to update both status and test button visibility
+      async function updateStatusAndTestButton() {
+        await updateSubscriptionStatus();
+        await updateTestButtonVisibility();
+      }
+      
+      // Test notification button handler
+      const testBtn = document.getElementById('test-notification-btn');
+      testBtn.addEventListener('click', async function() {
+        const errorEl = document.getElementById('push-error');
+        const successEl = document.getElementById('push-success');
+        
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        testBtn.disabled = true;
+        testBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+        
+        try {
+          const response = await fetch('/api/push/test', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok && result.success) {
+            successEl.textContent = result.message || 'Notificación de prueba enviada correctamente';
+            successEl.style.display = 'block';
+          } else {
+            errorEl.textContent = result.error || 'Error al enviar la notificación de prueba';
+            errorEl.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Test notification error:', error);
+          errorEl.textContent = 'Error: ' + (error.message || 'No se pudo enviar la notificación de prueba');
+          errorEl.style.display = 'block';
+        } finally {
+          testBtn.disabled = false;
+          testBtn.innerHTML = '<i class="bi bi-send"></i> Enviar Notificación de Prueba';
+        }
+      });
+      
       // Update status on page load
-      await updateSubscriptionStatus();
+      await updateStatusAndTestButton();
     })();
   </script>
 {% endblock %}

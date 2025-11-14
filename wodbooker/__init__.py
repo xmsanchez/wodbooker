@@ -16,7 +16,7 @@ import flask_login as login
 from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView, UserView
-from .models import User, Booking, Event, db, PushSubscription
+from .models import User, Booking, Event, db, PushSubscription, WodBusterBooking
 from .booker import start_booking_loop, sync_wodbuster_bookings
 from .scraper import get_scraper
 from .constants import DAYS_OF_WEEK
@@ -409,6 +409,89 @@ def push_unsubscribe():
         logging.exception("Error unsubscribing from push notifications")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/push/test', methods=['POST'])
+@login.login_required
+@csrf.exempt
+def push_test():
+    """
+    Test push notification endpoint - sends a notification immediately without time checks
+    Note: Exempted from CSRF as it's already protected by login_required
+    """
+    try:
+        user = login.current_user
+        
+        # Check if user has push notifications enabled
+        if not user.push_notifications_enabled:
+            return jsonify({
+                'success': False,
+                'error': 'Push notifications are not enabled for your account'
+            }), 400
+        
+        # Check if user has any subscriptions
+        subscriptions = db.session.query(PushSubscription).filter_by(user_id=user.id).all()
+        if not subscriptions:
+            return jsonify({
+                'success': False,
+                'error': 'No push subscriptions found. Please enable push notifications in your browser first.'
+            }), 400
+        
+        delay_seconds = 5
+
+        # Import here to avoid circular imports
+        from .push_notifications import send_push_notification
+        import threading
+        import time
+        
+        # Capture user_id for the thread (user object won't be accessible in thread)
+        user_id = user.id
+        
+        def send_test_notification(user_id, delay_seconds):
+            """Helper function to send notification (with optional delay)"""
+            # Create new app context for the thread
+            with app.app_context():
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
+                
+                # Re-query user in the new context
+                thread_user = db.session.query(User).filter_by(id=user_id).first()
+                if not thread_user:
+                    logging.error("User %s not found in thread context", user_id)
+                    return
+
+                # Send a generic test notification
+                title = "Wodbooker - Recordatorio de clase"
+                body = "Esta es una notificación de prueba."
+                
+                # Re-query subscriptions in the new context
+                thread_subscriptions = db.session.query(PushSubscription).filter_by(user_id=user_id).all()
+                for subscription in thread_subscriptions:
+                    send_push_notification(subscription, title, body, {'test': True})
+        
+        # Start thread to send notification (with optional delay)
+        thread = threading.Thread(
+            target=send_test_notification,
+            args=(user_id, delay_seconds),
+            daemon=True
+        )
+        thread.start()
+        
+        delay_msg = f" (will be sent in {delay_seconds} seconds)"
+        return jsonify({
+            'success': True,
+            'message': f'Test notification scheduled{delay_msg}',
+            'delay_seconds': delay_seconds,
+            'subscription_count': len(subscriptions)
+        }), 200
+        
+    except Exception as e:
+        logging.exception("Error testing push notifications")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/api/wodbuster/sync', methods=['POST'])
