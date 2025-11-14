@@ -270,18 +270,6 @@ class Booker(StoppableThread):
                     waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
-<<<<<<< HEAD
-                    booking_attempts += 1
-                    logging.warning("Booking failed. Attempt %d/%d. Retrying in %d second. %s",
-                                  booking_attempts, _MAX_BOOKING_ATTEMPTS, BOOKING_RETRY_DELAY, e)
-                    if booking_attempts >= _MAX_BOOKING_ATTEMPTS:
-                        logging.error("Max attempts reached for BookingFailed. Skipping this week.")
-                        skip_current_week = True
-                        event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
-                        _add_event(event)
-                    else:
-                        time_module.sleep(BOOKING_RETRY_DELAY)
-=======
                     logging.warning("Class cannot be booked %s", e)
                     skip_current_week = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
@@ -296,7 +284,6 @@ class Booker(StoppableThread):
                     )
                     
                     # send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
->>>>>>> aa04133 (feat: implement push notifications for successful bookings)
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
