@@ -174,3 +174,57 @@ def send_class_reminder(user, booking, reminder_minutes):
     
     return success_count
 
+
+def send_booking_status_notification(user, booking, is_success, message):
+    """
+    Send a push notification for booking success or failure
+    :param user: User object
+    :param booking: Booking object
+    :param is_success: True for success, False for failure
+    :param message: The message to send in the notification
+    :return: Number of successful notifications sent
+    """
+    # Check if user has push notifications enabled and the appropriate permission
+    if not user.push_notifications_enabled:
+        return 0
+    
+    if is_success and not user.push_permission_success:
+        return 0
+    
+    if not is_success and not user.push_permission_failure:
+        return 0
+    
+    # Get all active subscriptions for the user
+    subscriptions = db.session.query(PushSubscription).filter_by(user_id=user.id).all()
+    
+    if not subscriptions:
+        logging.debug("No push subscriptions found for user %s", user.email)
+        return 0
+    
+    # Create notification message
+    if is_success:
+        title = "Wodbooker - Reserva exitosa"
+    else:
+        title = "Wodbooker - Error en la reserva"
+    
+    body = message
+    
+    # Format booking info for the notification
+    from .constants import DAYS_OF_WEEK
+    booking_day = DAYS_OF_WEEK[booking.dow] if booking.dow < len(DAYS_OF_WEEK) else f"Día {booking.dow}"
+    booking_time = booking.time.strftime('%H:%M') if booking.time else 'N/A'
+    
+    data = {
+        "booking_id": booking.id,
+        "is_success": is_success,
+        "booking_day": booking_day,
+        "booking_time": booking_time
+    }
+    
+    success_count = 0
+    for subscription in subscriptions:
+        if send_push_notification(subscription, title, body, data):
+            success_count += 1
+    
+    return success_count
+

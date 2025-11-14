@@ -16,6 +16,7 @@ from .constants import EventMessage, UNEXPECTED_ERROR_MAIL_SUBJECT, \
     CLASS_BOOKED_MAIL_BODY
 from .scraper import get_scraper, Scraper
 from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
+from .push_notifications import send_booking_status_notification
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
@@ -246,6 +247,14 @@ class Booker(StoppableThread):
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
 
+                    # Send push notification for successful booking
+                    send_booking_status_notification(
+                        self._booking.user,
+                        self._booking,
+                        True,
+                        event.event
+                    )
+
                     email = None
                     if errors > 0:
                         email = SuccessAfterErrorEmail(self._booking, ERROR_AUTOHEALED_MAIL_SUBJECT, ERROR_AUTOHEALED_MAIL_BODY)
@@ -283,6 +292,15 @@ class Booker(StoppableThread):
                     skip_current_week = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
                     _add_event(event)
+                    
+                    # Send push notification for failed booking
+                    send_booking_status_notification(
+                        self._booking.user,
+                        self._booking,
+                        False,
+                        event.event
+                    )
+                    
                     # send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")

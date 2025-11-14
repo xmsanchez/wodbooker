@@ -38,6 +38,8 @@ class User(db.Model):
     force_login = db.Column(db.Boolean, default=False)
     mail_permission_success = db.Column(db.Boolean, default=True)
     mail_permission_failure = db.Column(db.Boolean, default=True)
+    push_permission_success = db.Column(db.Boolean, default=True)
+    push_permission_failure = db.Column(db.Boolean, default=True)
     athlete_id = db.Column(db.String(128), nullable=True)
     profile_picture_url = db.Column(db.String(512), nullable=True)
     wodbuster_bookings = db.relationship('WodBusterBooking', backref='user', lazy=True, cascade="all, delete-orphan")

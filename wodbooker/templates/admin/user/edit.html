@@ -1,192 +1,247 @@
 {% extends 'admin/model/edit.html' %}
+{% import 'admin/lib.html' as lib with context %}
+
+{% block head %}
+  {{ super() }}
+  <style>
+    @media (min-width: 992px) {
+      .container-fluid {
+        max-width: 98%;
+      }
+    }
+  </style>
+{% endblock %}
 
 {% block navlinks %}
 {% endblock %}
 
-{% block form %}
-  {{ super() }}
-{% endblock %}
-
-{% block form_fields %}
-  <div class="container-fluid">
-    <!-- Preferencias Email -->
-    <div class="card mb-3" style="border-left: 4px solid #2563eb;">
-      <div class="card-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
-        <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Preferencias Email</h5>
-      </div>
-      <div class="card-body">
-        <div class="form-group">
-          <div class="form-check form-switch">
-            {{ form.mail_permission_success(class="form-check-input") }}
-            <label class="form-check-label" for="{{ form.mail_permission_success.id }}">
-              {{ form.mail_permission_success.label.text }}
-            </label>
-          </div>
-          {% if form.mail_permission_success.errors %}
-            <div class="text-danger">
-              {% for error in form.mail_permission_success.errors %}
-                <small>{{ error }}</small>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </div>
-        
-        <div class="form-group mt-3">
-          <div class="form-check form-switch">
-            {{ form.mail_permission_failure(class="form-check-input") }}
-            <label class="form-check-label" for="{{ form.mail_permission_failure.id }}">
-              {{ form.mail_permission_failure.label.text }}
-            </label>
-          </div>
-          {% if form.mail_permission_failure.errors %}
-            <div class="text-danger">
-              {% for error in form.mail_permission_failure.errors %}
-                <small>{{ error }}</small>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    
-    <!-- Preferencias Notificaciones -->
-    <div class="card mb-3" style="border-left: 4px solid #059669;">
-      <div class="card-header" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);">
-        <h5 class="mb-0"><i class="bi bi-bell me-2"></i>Preferencias Notificaciones</h5>
-      </div>
-      <div class="card-body">
-        <div class="form-group">
-          <div class="form-check form-switch">
-            {{ form.push_notifications_enabled(class="form-check-input") }}
-            <label class="form-check-label" for="{{ form.push_notifications_enabled.id }}">
-              {{ form.push_notifications_enabled.label.text }}
-            </label>
-          </div>
-          {% if form.push_notifications_enabled.errors %}
-            <div class="text-danger">
-              {% for error in form.push_notifications_enabled.errors %}
-                <small>{{ error }}</small>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </div>
-        
-        <div class="form-group mt-3">
-          <label class="form-label">Recordatorios antes de la clase:</label>
-          <div class="ms-3">
-            <div class="form-check form-switch">
-              {{ form.push_reminder_1h(class="form-check-input") }}
-              <label class="form-check-label" for="{{ form.push_reminder_1h.id }}">
-                {{ form.push_reminder_1h.label.text }}
-              </label>
-            </div>
-            {% if form.push_reminder_1h.errors %}
-              <div class="text-danger">
-                {% for error in form.push_reminder_1h.errors %}
-                  <small>{{ error }}</small>
-                {% endfor %}
-              </div>
-            {% endif %}
-            
-            <div class="form-check form-switch mt-2">
-              {{ form.push_reminder_30m(class="form-check-input") }}
-              <label class="form-check-label" for="{{ form.push_reminder_30m.id }}">
-                {{ form.push_reminder_30m.label.text }}
-              </label>
-            </div>
-            {% if form.push_reminder_30m.errors %}
-              <div class="text-danger">
-                {% for error in form.push_reminder_30m.errors %}
-                  <small>{{ error }}</small>
-                {% endfor %}
-              </div>
-            {% endif %}
-            
-            <div class="form-check form-switch mt-2">
-              {{ form.push_reminder_15m(class="form-check-input") }}
-              <label class="form-check-label" for="{{ form.push_reminder_15m.id }}">
-                {{ form.push_reminder_15m.label.text }}
-              </label>
-            </div>
-            {% if form.push_reminder_15m.errors %}
-              <div class="text-danger">
-                {% for error in form.push_reminder_15m.errors %}
-                  <small>{{ error }}</small>
-                {% endfor %}
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Preferencias Sincronización -->
-    <div class="card mb-3" style="border-left: 4px solid #f59e0b;">
-      <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
-        <h5 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h5>
-      </div>
-      <div class="card-body">
-        <div class="form-group">
-          <div class="form-check form-switch">
-            {{ form.wodbuster_autosync_enabled(class="form-check-input") }}
-            <label class="form-check-label" for="{{ form.wodbuster_autosync_enabled.id }}">
-              {{ form.wodbuster_autosync_enabled.label.text }}
-            </label>
-          </div>
-          {% if form.wodbuster_autosync_enabled.errors %}
-            <div class="text-danger">
-              {% for error in form.wodbuster_autosync_enabled.errors %}
-                <small>{{ error }}</small>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-{% endblock %}
-
 {% block body %}
-  {{ super() }}
-  
-  <div class="container-fluid" style="margin-top: 20px;">
-    <div class="card">
-      <div class="card-header">
-        <h4>Notificaciones Push</h4>
+  <form action="" method="POST" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+
+    <div class="container-fluid">
+      <!-- Preferencias Email -->
+      <div class="card mb-3" style="border-left: 4px solid #2563eb;">
+        <div class="card-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
+          <h6 class="mb-0"><i class="bi bi-envelope me-2"></i> Preferencias Email</h6>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.mail_permission_success(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.mail_permission_success.id }}">
+                {{ form.mail_permission_success.label.text }}
+              </label>
+            </div>
+            {% if form.mail_permission_success.errors %}
+              <div class="text-danger">
+                {% for error in form.mail_permission_success.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="form-group mt-3">
+            <div class="form-check form-switch">
+              {{ form.mail_permission_failure(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.mail_permission_failure.id }}">
+                {{ form.mail_permission_failure.label.text }}
+              </label>
+            </div>
+            {% if form.mail_permission_failure.errors %}
+              <div class="text-danger">
+                {% for error in form.mail_permission_failure.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
       </div>
-      <div class="card-body">
-        <p>Las notificaciones push te permiten recibir recordatorios antes de tus clases.</p>
-        
-        <div id="push-notification-status" style="margin-bottom: 15px;">
-          <p><strong>Estado de suscripción:</strong> <span id="subscription-status">Comprobando...</span></p>
+
+      <!-- Preferencias Notificaciones Push -->
+      <div class="card mb-3" style="border-left: 4px solid #059669;">
+        <div class="card-header" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);">
+          <h6 class="mb-0"><i class="bi bi-bell me-2"></i> Preferencias Notificaciones Push</h6>
         </div>
-        
-        <div id="push-notification-actions">
-          <button id="subscribe-btn" class="btn btn-primary" style="display: none;">
-            <i class="bi bi-bell"></i> Activar Notificaciones Push
-          </button>
-          <button id="unsubscribe-btn" class="btn btn-secondary" style="display: none;">
-            <i class="bi bi-bell-slash"></i> Desactivar Notificaciones Push
-          </button>
+        <div class="card-body">
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.push_notifications_enabled(class="form-check-input", id="push-enabled-toggle") }}
+              <label class="form-check-label" for="push-enabled-toggle">
+                Habilitar el envío de notificaciones push
+              </label>
+            </div>
+            {% if form.push_notifications_enabled.errors %}
+              <div class="text-danger">
+                {% for error in form.push_notifications_enabled.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div id="push-settings-wrapper" style="display: none;">
+            <hr style="margin: 20px 0; border-color: #e2e8f0;">
+            
+            <div class="form-group">
+              <div class="form-check form-switch">
+                {{ form.push_permission_success(class="form-check-input") }}
+                <label class="form-check-label" for="{{ form.push_permission_success.id }}">
+                  {{ form.push_permission_success.label.text }}
+                </label>
+              </div>
+              {% if form.push_permission_success.errors %}
+                <div class="text-danger">
+                  {% for error in form.push_permission_success.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="form-group mt-3">
+              <div class="form-check form-switch">
+                {{ form.push_permission_failure(class="form-check-input") }}
+                <label class="form-check-label" for="{{ form.push_permission_failure.id }}">
+                  {{ form.push_permission_failure.label.text }}
+                </label>
+              </div>
+              {% if form.push_permission_failure.errors %}
+                <div class="text-danger">
+                  {% for error in form.push_permission_failure.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <hr style="margin: 20px 0; border-color: #e2e8f0;">
+
+            <div class="form-group mt-3">
+              <label class="form-label"><strong>Recordatorios antes de la clase:</strong></label>
+              <div class="ms-3">
+                <div class="form-check form-switch">
+                  {{ form.push_reminder_1h(class="form-check-input") }}
+                  <label class="form-check-label" for="{{ form.push_reminder_1h.id }}">
+                    {{ form.push_reminder_1h.label.text }}
+                  </label>
+                </div>
+                {% if form.push_reminder_1h.errors %}
+                  <div class="text-danger">
+                    {% for error in form.push_reminder_1h.errors %}
+                      <small>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                
+                <div class="form-check form-switch mt-2">
+                  {{ form.push_reminder_30m(class="form-check-input") }}
+                  <label class="form-check-label" for="{{ form.push_reminder_30m.id }}">
+                    {{ form.push_reminder_30m.label.text }}
+                  </label>
+                </div>
+                {% if form.push_reminder_30m.errors %}
+                  <div class="text-danger">
+                    {% for error in form.push_reminder_30m.errors %}
+                      <small>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                
+                <div class="form-check form-switch mt-2">
+                  {{ form.push_reminder_15m(class="form-check-input") }}
+                  <label class="form-check-label" for="{{ form.push_reminder_15m.id }}">
+                    {{ form.push_reminder_15m.label.text }}
+                  </label>
+                </div>
+                {% if form.push_reminder_15m.errors %}
+                  <div class="text-danger">
+                    {% for error in form.push_reminder_15m.errors %}
+                      <small>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <hr style="margin: 20px 0; border-color: #e2e8f0;">
+
+            <div id="push-notification-status" style="margin-bottom: 15px;">
+              <p><strong>Estado de suscripción del dispositivo:</strong> <span id="subscription-status">Comprobando...</span></p>
+            </div>
+            
+            <div id="push-notification-actions">
+              <button type="button" id="subscribe-btn" class="btn btn-primary" style="display: none;">
+                <i class="bi bi-bell"></i> Activar Notificaciones en este dispositivo
+              </button>
+              <button type="button" id="unsubscribe-btn" class="btn btn-secondary" style="display: none;">
+                <i class="bi bi-bell-slash"></i> Desactivar Notificaciones en este dispositivo
+              </button>
+            </div>
+            
+            <div id="push-test-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+              <h6 style="margin-bottom: 15px;">Probar Notificaciones</h6>
+              <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">
+                Envía una notificación de prueba para verificar que las notificaciones push funcionan correctamente. La notificación se enviará en 5 segundos.
+              </p>
+              <button type="button" id="test-notification-btn" class="btn btn-info" style="display: none;">
+                <i class="bi bi-send"></i> Enviar Notificación de Prueba
+              </button>
+            </div>
+            
+            <div id="push-error" class="alert alert-danger" style="display: none; margin-top: 15px;"></div>
+            <div id="push-success" class="alert alert-success" style="display: none; margin-top: 15px;"></div>
+          </div>
         </div>
-        
-        <div id="push-test-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-          <h5 style="margin-bottom: 15px;">Probar Notificaciones</h5>
-          <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">
-            Envía una notificación de prueba para verificar que las notificaciones push funcionan correctamente. La notificación se enviará en 5 segundos.
-          </p>
-          <button id="test-notification-btn" class="btn btn-info" style="display: none;">
-            <i class="bi bi-send"></i> Enviar Notificación de Prueba
-          </button>
+      </div>
+      
+      <!-- Preferencias Sincronización -->
+      <div class="card mb-3" style="border-left: 4px solid #f59e0b;">
+        <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+          <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h6>
         </div>
-        
-        <div id="push-error" class="alert alert-danger" style="display: none; margin-top: 15px;"></div>
-        <div id="push-success" class="alert alert-success" style="display: none; margin-top: 15px;"></div>
+        <div class="card-body">
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.wodbuster_autosync_enabled(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.wodbuster_autosync_enabled.id }}">
+                {{ form.wodbuster_autosync_enabled.label.text }}
+              </label>
+            </div>
+            {% if form.wodbuster_autosync_enabled.errors %}
+              <div class="text-danger">
+                {% for error in form.wodbuster_autosync_enabled.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-  
+    
+    {{ lib.render_form_buttons(return_url) }}
+  </form>
+
   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const toggle = document.getElementById('push-enabled-toggle');
+      const wrapper = document.getElementById('push-settings-wrapper');
+
+      function toggleWrapper() {
+        if (toggle.checked) {
+          wrapper.style.display = 'block';
+        } else {
+          wrapper.style.display = 'none';
+        }
+      }
+
+      toggle.addEventListener('change', toggleWrapper);
+      toggleWrapper(); // Initial check
+    });
+
     (async function() {
       // Check subscription status
       async function updateSubscriptionStatus() {
@@ -259,7 +314,11 @@
           errorEl.style.display = 'block';
         } finally {
           subscribeBtn.disabled = false;
-          subscribeBtn.innerHTML = '<i class="bi bi-bell"></i> Activar Notificaciones Push';
+          subscribeBtn.innerHTML = '';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-bell';
+          subscribeBtn.appendChild(icon);
+          subscribeBtn.appendChild(document.createTextNode(' Activar Notificaciones en este dispositivo'));
         }
       });
       
@@ -360,7 +419,11 @@
           errorEl.style.display = 'block';
         } finally {
           testBtn.disabled = false;
-          testBtn.innerHTML = '<i class="bi bi-send"></i> Enviar Notificación de Prueba';
+          testBtn.innerHTML = '';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-send';
+          testBtn.appendChild(icon);
+          testBtn.appendChild(document.createTextNode(' Enviar Notificación de Prueba'));
         }
       });
       
