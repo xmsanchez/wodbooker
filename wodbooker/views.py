@@ -22,7 +22,7 @@ from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
 from .constants import EventMessage, DAYS_OF_WEEK, DEFAULT_OFFSETS_BY_DAY
 
-_MAX_BOOKINGS_BY_USER = 10
+_MAX_BOOKINGS_BY_USER = 30
 
 
 class LoginForm(FlaskForm):
