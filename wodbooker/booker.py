@@ -41,13 +41,14 @@ WHITELIST_EMAILS = os.getenv('BOOKING_WHITELIST_EMAILS', '').split()
 # from not succeeding when there is a penalization
 # I know it's a weird workaround :-)
 _MAX_ERRORS = 500
+_MAX_BOOKING_ATTEMPTS = 20
 
 __CURRENT_THREADS = {
 }
 
 # Simple in-memory coordination for user bookings
-_USER_COORDINATORS = {}  # user_email -> _UserBookingCoordinator
-_LAST_BOOKING_TIME = {}  # user_email -> datetime
+_GLOBAL_BOOKING_LOCK = threading.Lock()
+_LAST_GLOBAL_BOOKING_TIME = None
 
 
 class _UserBookingCoordinator:
@@ -175,6 +176,7 @@ class Booker(StoppableThread):
             sleep_milliseconds = random.randint(1, 1000) / 1000
             while errors < _MAX_ERRORS and not force_exit:
                 try:
+                    booking_attempts = 0
                     book_time = time(self._booking.time.hour, self._booking.time.minute, 0)
                     _datetime_to_book = _get_datetime_to_book(self._booking.last_book_date, self._booking.dow, book_time)
 
@@ -220,8 +222,17 @@ class Booker(StoppableThread):
                         high_level_logger.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
 
                     # Use coordinator to ensure 1-second minimum interval between bookings
-                    coordinator = _get_user_coordinator(self._booking.user.email)
-                    coordinator.wait_for_booking_slot()
+                    with _GLOBAL_BOOKING_LOCK:
+                        global _LAST_GLOBAL_BOOKING_TIME
+                        now = datetime.now(_MADRID_TZ)
+                        if _LAST_GLOBAL_BOOKING_TIME:
+                            time_since_last = (now - _LAST_GLOBAL_BOOKING_TIME).total_seconds()
+                            if time_since_last < 0.5:
+                                sleep_time = 0.5 - time_since_last
+                                logging.info("Waiting %.2f seconds to maintain 0.5-second global booking interval", sleep_time)
+                                time_module.sleep(sleep_time)
+                        
+                        _LAST_GLOBAL_BOOKING_TIME = datetime.now(_MADRID_TZ)
 
                     # Refresh the scraper in case a new one is avaiable
                     scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
@@ -237,9 +248,9 @@ class Booker(StoppableThread):
                             scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
                             booking_successful = True
                         except BookingLockedException as e:
-                            logging.warning("Booking locked for user %s: %s. Retrying in 1 second...", 
+                            logging.warning("Booking locked for user %s: %s. Retrying in 0.2 second...", 
                                           self._booking.user.email, str(e))
-                            time_module.sleep(1)  # Wait 1 second before retry
+                            time_module.sleep(0.2)  # Wait 0.2 second before retry
                             # Don't increment error count for booking locks
                             continue
                     high_level_logger.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
@@ -262,11 +273,16 @@ class Booker(StoppableThread):
                     self._booking.booked_at = datetime.now().replace(microsecond=0)
                     self._booking.user.cookie = scraper.get_cookies()
                 except ClassNotFound as e:
-                    logging.warning("Class not found. Ignoring this week and attempting booking for next week %s", e)
-                    skip_current_week = True
-                    event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M:%S")))
-                    _add_event(event)
-                    # send_email(self._booking.user, ErrorEmail(self._booking, "Clase no encontrada", event.event))
+                    booking_attempts += 1
+                    logging.warning("Class not found. Attempt %d/%d. Retrying in 1 second. %s",
+                                  booking_attempts, _MAX_BOOKING_ATTEMPTS, e)
+                    if booking_attempts >= _MAX_BOOKING_ATTEMPTS:
+                        logging.error("Max attempts reached for ClassNotFound. Skipping this week.")
+                        skip_current_week = True
+                        event = Event(booking_id=self._booking.id, event=EventMessage.CLASS_NOT_FOUND % (datetime_to_book.strftime("%d/%m/%Y"), datetime_to_book.strftime("%H:%M:%S")))
+                        _add_event(event)
+                    else:
+                        time_module.sleep(1)
 
                 # In some boxes a penalty can be set in place when people make a book cancellation
                 # This should be managed in the scraper.py book function but I don't really know
@@ -279,11 +295,16 @@ class Booker(StoppableThread):
                     waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
-                    logging.warning("Class cannot be booked %s", e)
-                    skip_current_week = True
-                    event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
-                    _add_event(event)
-                    # send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
+                    booking_attempts += 1
+                    logging.warning("Booking failed. Attempt %d/%d. Retrying in 1 second. %s",
+                                  booking_attempts, _MAX_BOOKING_ATTEMPTS, e)
+                    if booking_attempts >= _MAX_BOOKING_ATTEMPTS:
+                        logging.error("Max attempts reached for BookingFailed. Skipping this week.")
+                        skip_current_week = True
+                        event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
+                        _add_event(event)
+                    else:
+                        time_module.sleep(1)
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
@@ -464,10 +485,8 @@ def start_booking_loop(booking: Booking) -> None:
         db.session.commit()
         return
 
-    coordinator = _get_user_coordinator(booking.user.email)
-    priority_score = coordinator.get_priority_score(booking)
-    high_level_logger.info("Starting thread for booking %s (user: %s, priority score: %d)", 
-                booking.id, booking.user.email, priority_score)
+    high_level_logger.info("Starting thread for booking %s (user: %s)", 
+                booking.id, booking.user.email)
     booker = Booker(booking, app.app_context())
     __CURRENT_THREADS[booking.id] = booker
     booker.start()
