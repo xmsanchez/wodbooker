@@ -477,10 +477,10 @@ def push_test():
         )
         thread.start()
         
-        delay_msg = f" (will be sent in {delay_seconds} seconds)"
+        delay_msg = f" (se enviará en {delay_seconds} segundos)"
         return jsonify({
             'success': True,
-            'message': f'Test notification scheduled{delay_msg}',
+            'message': f'Notificación de prueba programada {delay_msg}',
             'delay_seconds': delay_seconds,
             'subscription_count': len(subscriptions)
         }), 200
