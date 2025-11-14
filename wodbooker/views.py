@@ -303,6 +303,25 @@ class BookingAdmin(sqla.ModelView):
         kwargs['DAYS_OF_WEEK'] = DAYS_OF_WEEK
         kwargs['weekday_stats'] = getattr(self, '_weekday_stats', {})
         
+        # Map class names to colors (same as weekly_classes route)
+        class_color_map_by_name = {
+            'GAP': '#ec4899',  # pink
+            'ENDURANCE': '#0ea5e9',  # light blue
+        }
+        
+        # Map class type IDs to colors (for fallback)
+        class_color_map_by_id = {
+            1: '#059669',  # green - Wod
+            2: '#000000',  # black - Open Box
+            7: '#000000',  # black - Open Box*
+            9: '#2563eb',  # blue - Gymnastics
+            10: '#be185d',  # dark pink - Teens
+            14: '#64748b',  # gray - Adapted Training
+            17: '#eab308',  # yellow - Minimal
+            18: '#0ea5e9',  # light blue - Endurance
+            19: '#ec4899',  # pink - GAP
+        }
+        
         # Fetch WodBuster bookings for the current week only
         wodbuster_bookings = []
         if login.current_user.is_authenticated:
@@ -314,12 +333,76 @@ class BookingAdmin(sqla.ModelView):
             sunday = monday + timedelta(days=6)
             
             # Get all WodBuster bookings for current week
-            wodbuster_bookings = db.session.query(WodBusterBooking).filter(
+            bookings = db.session.query(WodBusterBooking).filter(
                 WodBusterBooking.user_id == login.current_user.id,
                 WodBusterBooking.is_cancelled == False,
                 WodBusterBooking.class_date >= monday,
                 WodBusterBooking.class_date <= sunday
             ).order_by(WodBusterBooking.class_date, WodBusterBooking.class_time).all()
+            
+            # Process bookings to add color information
+            for booking in bookings:
+                # Use class_name as the friendly name (it contains the friendly name from Nombre field in JSON)
+                # If class_name is None or empty, try to derive from class_type as fallback
+                if booking.class_name:
+                    friendly_name = booking.class_name
+                elif booking.class_type:
+                    # Fallback: try to map class_type to friendly name
+                    if booking.class_type == 'wod':
+                        friendly_name = 'Wod'
+                    elif booking.class_type == 'openbox':
+                        friendly_name = 'Open Box'
+                    elif booking.class_type.startswith('type_'):
+                        try:
+                            id_e = int(booking.class_type.split('_')[1])
+                            # Map some known IDs
+                            if id_e == 17:
+                                friendly_name = 'Minimal'
+                            elif id_e == 14:
+                                friendly_name = 'Adapted Training'
+                            elif id_e == 10:
+                                friendly_name = 'Teens'
+                            elif id_e == 9:
+                                friendly_name = 'Gymnastics'
+                            elif id_e == 18:
+                                friendly_name = 'Endurance'
+                            elif id_e == 19:
+                                friendly_name = 'GAP'
+                            else:
+                                friendly_name = f'Type {id_e}'
+                        except (ValueError, IndexError):
+                            friendly_name = booking.class_type
+                    else:
+                        friendly_name = booking.class_type
+                else:
+                    friendly_name = 'N/A'
+                
+                # Get color: first check by name (uppercase), then try to extract ID from class_type
+                friendly_name_upper = friendly_name.upper()
+                if friendly_name_upper in class_color_map_by_name:
+                    booking.badge_color = class_color_map_by_name[friendly_name_upper]
+                else:
+                    # Try to extract ID from class_type (e.g., 'type_18' -> 18, 'wod' -> 1, 'openbox' -> 2)
+                    id_e = None
+                    if booking.class_type:
+                        if booking.class_type == 'wod':
+                            id_e = 1
+                        elif booking.class_type == 'openbox':
+                            id_e = 2
+                        elif booking.class_type.startswith('type_'):
+                            try:
+                                id_e = int(booking.class_type.split('_')[1])
+                            except (ValueError, IndexError):
+                                pass
+                    
+                    if id_e and id_e in class_color_map_by_id:
+                        booking.badge_color = class_color_map_by_id[id_e]
+                    else:
+                        booking.badge_color = '#64748b'  # default gray
+                
+                booking.badge_name = friendly_name
+            
+            wodbuster_bookings = bookings
         
         kwargs['wodbuster_bookings'] = wodbuster_bookings
         return super().render(template, **kwargs)

@@ -168,11 +168,10 @@
                 <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseWB{{wb_booking.id}}" aria-expanded="false" aria-controls="collapseWB{{wb_booking.id}}" style="padding: 0; text-decoration: none;">
                   <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">
                     {{ wb_booking.class_time.strftime('%H:%M') }}
-                    <span class="badge badge-info" style="background-color: #3b82f6; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem;">WodBuster</span>
+                    <span class="badge" style="background-color: {{ wb_booking.badge_color or '#3b82f6' }}; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem; border-radius: 4px; font-weight: 500;">
+                      {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
+                    </span>
                   </h4>
-                  <p style="margin-bottom: 0; font-size: 0.875rem; color: #64748b;">
-                    {{ wb_booking.class_name }} {{ wb_booking.class_type or 'N/A' }}
-                  </p>
                 </button>
               </h2>
             </div>
@@ -189,11 +188,7 @@
                   </p>
                   <p style="margin-bottom: 0.5rem;">
                     <b>Clase</b><br/>
-                    {{ wb_booking.class_name }}
-                  </p>
-                  <p style="margin-bottom: 0.5rem;">
-                    <b>Tipo</b><br/>
-                    {{ wb_booking.class_type or 'N/A' }}
+                    {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
                   </p>
                   <p style="margin-bottom: 0.5rem;">
                     <b>Box</b><br/>
