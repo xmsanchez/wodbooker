@@ -21,6 +21,9 @@ from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
 from .models import db, Booking, Event, User, WodBusterBooking
 
+# Import high-level logger for important business events
+high_level_logger = logging.getLogger('high_level')
+
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
 # Priority users list - users in this list will have precedence over others
@@ -214,7 +217,7 @@ class Booker(StoppableThread):
                         logging.info("User %s is not in priority list, waiting 1 second before booking", self._booking.user.email)
                         time_module.sleep(1)
                     else:
-                        logging.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
+                        high_level_logger.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
 
                     # Use coordinator to ensure 1-second minimum interval between bookings
                     coordinator = _get_user_coordinator(self._booking.user.email)
@@ -239,7 +242,7 @@ class Booker(StoppableThread):
                             time_module.sleep(1)  # Wait 1 second before retry
                             # Don't increment error count for booking locks
                             continue
-                    logging.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
+                    high_level_logger.info("Booking for user %s at %s completed successfully", self._booking.user.email, datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'))
                     event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_COMPLETED % day_to_book.strftime('%d/%m/%Y'))
                     _add_event(event)
 
@@ -348,7 +351,7 @@ class Booker(StoppableThread):
                 event = Event(booking_id=self._booking.id, event=EventMessage.TOO_MANY_ERRORS)
                 _add_event(event)
                 db.session.commit()
-            logging.info("Exiting thread...")
+            high_level_logger.info("Exiting thread...")
         except _StopThreadException:
             logging.info("Thread %s has been stopped", self._name)
         except Exception:
@@ -391,7 +394,7 @@ class _TimeWaiter(_Waiter):
         Wait until the provided date is reached
         """
         if self._wait_datetime > datetime.now(_MADRID_TZ):
-            logging.info("Waiting until %s", self._wait_datetime.strftime('%d/%m/%Y %H:%M:%S'))
+            high_level_logger.info("Waiting until %s", self._wait_datetime.strftime('%d/%m/%Y %H:%M:%S'))
             event = Event(booking_id=self.booking.id, event=self.log_message)
             _add_event(event)
             db.session.commit()
@@ -452,7 +455,7 @@ def start_booking_loop(booking: Booking) -> None:
     """
     # Check whitelist if it's configured
     if WHITELIST_EMAILS and booking.user.email not in WHITELIST_EMAILS:
-        logging.warning("Booking attempt blocked: User %s is not in the whitelist. Whitelist contains: %s", 
+        high_level_logger.warning("Booking attempt blocked: User %s is not in the whitelist. Whitelist contains: %s", 
                        booking.user.email, ', '.join(WHITELIST_EMAILS))
         # Create an event to log this blocked attempt
         event = Event(booking_id=booking.id, 
@@ -463,7 +466,7 @@ def start_booking_loop(booking: Booking) -> None:
 
     coordinator = _get_user_coordinator(booking.user.email)
     priority_score = coordinator.get_priority_score(booking)
-    logging.info("Starting thread for booking %s (user: %s, priority score: %d)", 
+    high_level_logger.info("Starting thread for booking %s (user: %s, priority score: %d)", 
                 booking.id, booking.user.email, priority_score)
     booker = Booker(booking, app.app_context())
     __CURRENT_THREADS[booking.id] = booker

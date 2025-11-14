@@ -145,3 +145,5 @@ db.sqlite
 nginx/conf.d
 nginx/letsencrypt/**
 nginx/nginx.conf
+
+logs

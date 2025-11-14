@@ -22,6 +22,23 @@ _WODBUSTER_NOT_ACCEPTING_REQUESTS_MESSAGE = "WodBuster is not accepting more req
 _MORE_THAN_ONE_BOX_MESSAGE = "User can access more than to boxes"
 
 
+def _safe_log_response_content(response_text, max_length=2000):
+    """
+    Safely log response content, truncating if too long and handling encoding issues
+    :param response_text: The response text to log
+    :param max_length: Maximum length to log (default 2000)
+    :return: Safe string to log
+    """
+    try:
+        if isinstance(response_text, bytes):
+            response_text = response_text.decode('utf-8', errors='replace')
+        if len(response_text) > max_length:
+            return response_text[:max_length] + f"... [truncated, total length: {len(response_text)}]"
+        return response_text
+    except Exception as e:
+        return f"[Error encoding response content: {str(e)}]"
+
+
 class Scraper():
     """
     WodBuster scraper
@@ -237,13 +254,46 @@ class Scraper():
             if request.status_code == 302 and "login" in request.headers["Location"]:
                 raise InvalidBox("Provided URL is not accesible for the given user")
             if request.status_code != 200:
+                # Log detailed information for non-200 status codes
+                content_type = request.headers.get('Content-Type', 'unknown')
+                response_text = _safe_log_response_content(request.text)
+                logging.error(
+                    "WodBuster returned non-200 status code. URL: %s, Status: %d, Content-Type: %s, "
+                    "Response headers: %s, Response text (first 2000 chars): %s",
+                    url, request.status_code, content_type, dict(request.headers), response_text
+                )
                 raise InvalidWodBusterResponse('Invalid response status from WodBuster')
             return request.json()
         except requests.exceptions.JSONDecodeError as e:
+            # Log detailed information for JSON decode errors
+            content_type = request.headers.get('Content-Type', 'unknown')
+            response_text = _safe_log_response_content(request.text)
+            logging.error(
+                "WodBuster returned non-JSON response. URL: %s, Status: %d, Content-Type: %s, "
+                "Response headers: %s, Response text (first 2000 chars): %s, JSONDecodeError: %s",
+                url, request.status_code, content_type, dict(request.headers), response_text, str(e)
+            )
             if "Pon tu usuario y contraseña para acceder a reservar tus clases" in request.text:
                 logging.error('There was an error trying to log the user in. The user should try to access wodbooker from a private browser window in order to force the cookie to update.')
             raise InvalidWodBusterResponse('WodBuster returned a non JSON response') from e
         except requests.exceptions.RequestException as e:
+            # Log detailed information for request exceptions
+            logging.error(
+                "Request exception when calling WodBuster. URL: %s, Exception type: %s, Exception: %s",
+                url, type(e).__name__, str(e)
+            )
+            # If we have a response object, log it
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    content_type = e.response.headers.get('Content-Type', 'unknown')
+                    response_text = _safe_log_response_content(e.response.text)
+                    logging.error(
+                        "Request exception response details. Status: %d, Content-Type: %s, "
+                        "Response headers: %s, Response text (first 2000 chars): %s",
+                        e.response.status_code, content_type, dict(e.response.headers), response_text
+                    )
+                except Exception as log_error:
+                    logging.error("Error logging exception response details: %s", str(log_error))
             raise InvalidWodBusterResponse('WodBuster returned a non expected response') from e
 
     def wait_until_event(self, url: str, date: datetime.date, expected_events:list,
