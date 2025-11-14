@@ -16,6 +16,7 @@ from .constants import EventMessage, UNEXPECTED_ERROR_MAIL_SUBJECT, \
     CLASS_BOOKED_MAIL_BODY
 from .scraper import get_scraper, Scraper
 from .mailer import send_email, ErrorEmail, SuccessAfterErrorEmail, SuccessEmail
+from .push_notifications import send_booking_status_notification
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
@@ -223,6 +224,29 @@ class Booker(StoppableThread):
                     if self._attempt_booking(datetime_to_book, scraper):
                         errors, class_is_full_notification_sent = self._handle_successful_booking(day_to_book, scraper, errors, class_is_full_notification_sent)
 
+                    # Send push notification for successful booking
+                    send_booking_status_notification(
+                        self._booking.user,
+                        self._booking,
+                        True,
+                        event.event
+                    )
+
+                    email = None
+                    if errors > 0:
+                        email = SuccessAfterErrorEmail(self._booking, ERROR_AUTOHEALED_MAIL_SUBJECT, ERROR_AUTOHEALED_MAIL_BODY)
+                        errors = 0
+
+                    if class_is_full_notification_sent:
+                        email = SuccessAfterErrorEmail(self._booking, FULL_CLASS_BOOKED_MAIL_SUBJECT, FULL_CLASS_BOOKED_MAIL_BODY)
+                        class_is_full_notification_sent = False
+
+                    email = email or SuccessEmail(self._booking, CLASS_BOOKED_MAIL_SUBJECT, CLASS_BOOKED_MAIL_BODY)
+                    # send_email(self._booking.user, email)
+
+                    self._booking.last_book_date = day_to_book
+                    self._booking.booked_at = datetime.now().replace(microsecond=0)
+                    self._booking.user.cookie = scraper.get_cookies()
                 except ClassNotFound as e:
                     booking_attempts += 1
                     logging.warning("Class not found. Attempt %d/%d. Retrying in %d second. %s",
@@ -246,6 +270,7 @@ class Booker(StoppableThread):
                     waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
+<<<<<<< HEAD
                     booking_attempts += 1
                     logging.warning("Booking failed. Attempt %d/%d. Retrying in %d second. %s",
                                   booking_attempts, _MAX_BOOKING_ATTEMPTS, BOOKING_RETRY_DELAY, e)
@@ -256,6 +281,22 @@ class Booker(StoppableThread):
                         _add_event(event)
                     else:
                         time_module.sleep(BOOKING_RETRY_DELAY)
+=======
+                    logging.warning("Class cannot be booked %s", e)
+                    skip_current_week = True
+                    event = Event(booking_id=self._booking.id, event=EventMessage.BOOKING_ERROR % (datetime_to_book.strftime("%d/%m/%Y"), str(e).rstrip(".")))
+                    _add_event(event)
+                    
+                    # Send push notification for failed booking
+                    send_booking_status_notification(
+                        self._booking.user,
+                        self._booking,
+                        False,
+                        event.event
+                    )
+                    
+                    # send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
+>>>>>>> aa04133 (feat: implement push notifications for successful bookings)
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
