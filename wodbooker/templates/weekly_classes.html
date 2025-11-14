@@ -75,7 +75,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('booking.index_view') }}">
-                <i class="bi bi-calendar-check me-2"></i>WodBooker
+                <i class="bi bi-calendar-check me-2"></i> WodBooker
             </a>
             {% if current_user.is_authenticated %}
             <div class="navbar-nav ml-auto">
@@ -100,19 +100,20 @@
     </nav>
 
     <div class="content">
+        <div>
+            <a class="btn btn-outline-secondary" href="{{ url_for('booking.index_view') }}" role="button">
+                <i class="bi bi-arrow-left me-2"></i>Volver a Reservas
+            </a>
+        </div>
+        <br />
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2 style="font-size: 1.75rem; font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">
-                    <i class="bi bi-calendar-week me-2"></i>Clases Próxima Semana
+                <h2 style="font-size: 1.5rem; font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">
+                    <i class="bi bi-calendar-week me-2"></i> Clases Próxima Semana
                 </h2>
-                <p style="color: #64748b; margin-bottom: 0;">
+                <p style="font-size: 0.95rem; color: #64748b; margin-bottom: 0;">
                     Semana del {{ start_date.strftime('%d/%m/%Y') }} al {{ end_date.strftime('%d/%m/%Y') }}
                 </p>
-            </div>
-            <div>
-                <a class="btn btn-outline-secondary" href="{{ url_for('booking.index_view') }}" role="button">
-                    <i class="bi bi-arrow-left me-2"></i>Volver a Reservas
-                </a>
             </div>
         </div>
 
