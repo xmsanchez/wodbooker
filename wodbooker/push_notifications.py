@@ -1,11 +1,19 @@
 import logging
 import json
+import base64
 from flask import current_app
 from pywebpush import webpush, WebPushException
 from .models import db, PushSubscription, User, WodBusterBooking
 import pytz
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
+
+# Try to import py_vapid for proper key handling
+try:
+    from py_vapid import Vapid01
+    HAS_PY_VAPID = True
+except ImportError:
+    HAS_PY_VAPID = False
 
 
 def send_push_notification(subscription, title, body, data=None):
@@ -18,10 +26,10 @@ def send_push_notification(subscription, title, body, data=None):
     :return: True if successful, False otherwise
     """
     try:
-        vapid_private_key = current_app.config.get('VAPID_PRIVATE_KEY')
+        vapid_private_key_str = current_app.config.get('VAPID_PRIVATE_KEY')
         vapid_claim_email = current_app.config.get('VAPID_CLAIM_EMAIL', 'mailto:admin@example.com')
         
-        if not vapid_private_key:
+        if not vapid_private_key_str:
             logging.error("VAPID private key not configured")
             return False
         
@@ -41,11 +49,52 @@ def send_push_notification(subscription, title, body, data=None):
         if data:
             payload.update(data)
         
+        # Build vapid_claims dictionary (pywebpush expects this format)
+        vapid_claims = {
+            "sub": vapid_claim_email
+        }
+        
+        # Try to convert to PEM format
+        try:
+            # Decode base64url to raw bytes
+            private_key_b64 = vapid_private_key_str
+            # Fix padding:
+            private_key_b64 += '=' * (-len(private_key_b64) % 4)
+            private_key_bytes = base64.urlsafe_b64decode(private_key_b64)
+            
+            from cryptography.hazmat.primitives.asymmetric import ec
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.backends import default_backend
+            
+            private_value = int.from_bytes(private_key_bytes, 'big')
+            curve = ec.SECP256R1()
+            
+            # Use cryptography library to create the key from private value.
+            # ec.derive_private_key automatically computes the public key.
+            private_key = ec.derive_private_key(private_value, curve, default_backend())
+            
+            # The py-vapid library expects a base64url-encoded DER key.
+            # We serialize our key object to DER format...
+            der_key = private_key.private_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+
+            # ...and then base64url encode it.
+            vapid_private_key = base64.urlsafe_b64encode(der_key).decode('utf-8').rstrip("=")
+            
+            logging.info("Successfully converted VAPID key to base64url(DER) format.")
+
+        except Exception as e:
+            logging.warning("Could not convert VAPID key. Using raw string. Error: %s", e)
+            vapid_private_key = vapid_private_key_str
+        
         webpush(
             subscription_info=subscription_info,
             data=json.dumps(payload),
             vapid_private_key=vapid_private_key,
-            vapid_claim_email=vapid_claim_email
+            vapid_claims=vapid_claims
         )
         
         logging.info("Push notification sent successfully to subscription %s", subscription.id)
@@ -108,7 +157,7 @@ def send_class_reminder(user, booking, reminder_minutes):
     elif reminder_minutes == 15:
         reminder_text = "15 minutos"
     
-    title = f"Recordatorio de clase - {reminder_text}"
+    title = f"Wodbooker - Recordatorio de clase - {reminder_text}"
     body = f"{booking.class_name or 'Clase'} a las {booking.class_time.strftime('%H:%M')}"
     
     data = {
