@@ -35,6 +35,9 @@
           </button>
         </form>
       {% endif %}
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('weekly_classes') }}" role="button" title="Ver clases de la próxima semana">
+        <i class="bi bi-calendar-week"></i> Clases próxima semana
+      </a>
       <a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a>
     </div>
   </div>
