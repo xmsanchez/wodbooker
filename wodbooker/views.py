@@ -550,10 +550,14 @@ class EventView(sqla.ModelView):
         return redirect(url_for('admin.login_view', next=request.url))
 
 
-class UserForm(form.Form):
+class UserForm(FlaskForm):
 
     mail_permission_success = fields.BooleanField('Recibir notificaciones de reservas exitosas')
     mail_permission_failure = fields.BooleanField('Recibir notificaciones de fallos en reservas')
+    
+    # Push notification settings for booking status
+    push_permission_success = fields.BooleanField('Recibir notificaciones de reservas exitosas')
+    push_permission_failure = fields.BooleanField('Recibir notificaciones de fallos en reservas')
     
     # Push notification settings
     push_notifications_enabled = fields.BooleanField('Habilitar notificaciones push')
