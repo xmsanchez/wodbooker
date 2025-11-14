@@ -8,6 +8,7 @@ import pickle
 import requests
 import cloudscraper
 import logging
+from logging.handlers import TimedRotatingFileHandler
 from flask import Flask, redirect, request, session, g, jsonify
 
 from flask_admin import Admin
@@ -21,7 +22,66 @@ from .mailer import process_maling_queue
 from .notification_scheduler import _notification_scheduler_loop
 
 # Configure logging
-logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
+# Create logs directory if it doesn't exist
+app_dir = op.realpath(os.path.dirname(__file__))
+project_dir = op.dirname(app_dir)
+logs_dir = op.join(project_dir, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+
+# Configure main logger with file and console handlers
+log_format = '%(asctime)s - %(threadName)s - %(message)s'
+main_logger = logging.getLogger()
+main_logger.setLevel(logging.INFO)
+
+# Remove existing handlers to avoid duplicates
+main_logger.handlers.clear()
+
+# File handler with daily rotation
+log_file = op.join(logs_dir, 'wodbooker.log')
+file_handler = TimedRotatingFileHandler(
+    log_file,
+    when='midnight',
+    interval=1,
+    backupCount=7,
+    encoding='utf-8'
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter(log_format))
+main_logger.addHandler(file_handler)
+
+# Console handler for Docker logs
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter(log_format))
+main_logger.addHandler(console_handler)
+
+# Create high-level logger for important business events
+high_level_logger = logging.getLogger('high_level')
+high_level_logger.setLevel(logging.INFO)
+high_level_logger.propagate = False  # Don't propagate to root logger
+
+# High-level file handler
+high_level_log_file = op.join(logs_dir, 'wodbooker-high-level.log')
+high_level_file_handler = TimedRotatingFileHandler(
+    high_level_log_file,
+    when='midnight',
+    interval=1,
+    backupCount=7,
+    encoding='utf-8'
+)
+high_level_file_handler.setLevel(logging.INFO)
+high_level_file_handler.setFormatter(logging.Formatter(log_format))
+high_level_logger.addHandler(high_level_file_handler)
+
+# High-level console handler
+high_level_console_handler = logging.StreamHandler()
+high_level_console_handler.setLevel(logging.INFO)
+high_level_console_handler.setFormatter(logging.Formatter(log_format))
+high_level_logger.addHandler(high_level_console_handler)
+
+# Configure Flask/Werkzeug loggers to WARNING level to filter out HTTP request noise
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+logging.getLogger('flask').setLevel(logging.WARNING)
 
 # # Get version
 # __git_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.git"
@@ -402,7 +462,7 @@ def _cleaning_loop(app_context):
     app_context.push()
     with app_context:
         while True:
-            logging.info("Cleaning events older than 15 days")
+            high_level_logger.info("Cleaning events older than 15 days")
             bookings = db.session.query(Booking).all()
             for booking in bookings:
                 events_older_than_15_days = list(filter(lambda x: x.date < datetime.now() - timedelta(days=15),
