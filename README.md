@@ -41,57 +41,6 @@ Once the request is created, a thread will take care of it by:
 4. If the day has been loaded but booking is not available yet, the thread will wait unitl the class is available. 
 5. Once the booking has been performed, the thread will execute the whole process again for the same day of the next week.
 
-## Push Notifications (WIP)
-
-I am implementing browser push notifications to remind users before their booked classes. Users can enable push notifications and choose to receive reminders at 1 hour, 30 minutes, and/or 15 minutes before a class.
-
-### Technical setup for push notifications
-
-#### 1. Generate VAPID Keys
-
-VAPID (Voluntary Application Server Identification) keys are required for push notifications. Generate them using the provided script:
-
-```bash
-python generate_vapid_keys.py your-email@example.com
-```
-
-This will output three environment variables that you need to set:
-- `VAPID_PUBLIC_KEY`: The public key (safe to share)
-- `VAPID_PRIVATE_KEY`: The private key (keep secret!)
-- `VAPID_CLAIM_EMAIL`: Contact email for the service (format: `mailto:your-email@example.com`)
-
-**Note**: The email in `VAPID_CLAIM_EMAIL` is not used to send emails. It's just a contact identifier required by the VAPID protocol to identify who controls the push notification service.
-
-#### 2. Set Environment Variables
-
-Add the VAPID keys to your environment variables. If using Docker Compose, add them to your `.env` file:
-
-```bash
-VAPID_PUBLIC_KEY=your-generated-public-key
-VAPID_PRIVATE_KEY=your-generated-private-key
-VAPID_CLAIM_EMAIL=mailto:your-email@example.com
-```
-
-#### 3. Restart the Application
-
-After setting the environment variables, restart your application:
-
-```bash
-docker compose restart wodbooker
-```
-
-### User Experience
-
-Users can enable push notifications by:
-
-1. Going to **Preferencias** in the header menu
-2. Scrolling to the **Notificaciones Push** section
-3. Clicking **"Activar Notificaciones Push"**
-4. Granting permission when the browser prompts
-5. Selecting which reminder times they want (1 hour, 30 minutes, 15 minutes)
-
-The push notifications will automatically be sent based on the user's preferences and their confirmed, non-cancelled bookings.
-
 ## Running in docker
 
 ### Requirements
@@ -163,4 +112,47 @@ Add this line:
 
 ```bash
 0 0 * * * /usr/bin/docker exec -ti nginx-wodbooker certbot renew --quiet
+```
+
+## Push Notifications (WIP)
+
+I am implementing browser push notifications to remind users before their booked classes. Users can enable push notifications and choose to receive reminders at 1 hour, 30 minutes, and/or 15 minutes before a class.
+
+The push notifications will automatically be sent based on the user's preferences and their confirmed, non-cancelled bookings.
+
+:important: The users must enable push notifications through the "Preferencias" menu.
+
+### Technical setup for push notifications
+
+#### 1. Generate VAPID Keys
+
+VAPID (Voluntary Application Server Identification) keys are required for push notifications. Generate them using the provided script:
+
+```bash
+python generate_vapid_keys.py your-email@example.com
+```
+
+This will output three environment variables that you need to set:
+- `VAPID_PUBLIC_KEY`: The public key (safe to share)
+- `VAPID_PRIVATE_KEY`: The private key (keep secret!)
+- `VAPID_CLAIM_EMAIL`: Contact email for the service (format: `mailto:your-email@example.com`)
+
+**Note**: The email in `VAPID_CLAIM_EMAIL` is not used to send emails. It's just a contact identifier required by the VAPID protocol to identify who controls the push notification service.
+
+#### 2. Set Environment Variables
+
+Add the VAPID keys to your environment variables. If using Docker Compose, add them to your `.env` file:
+
+```bash
+VAPID_PUBLIC_KEY=your-generated-public-key
+VAPID_PRIVATE_KEY=your-generated-private-key
+VAPID_CLAIM_EMAIL=mailto:your-email@example.com
+```
+
+#### 3. Restart the Application
+
+After setting the environment variables, restart your application:
+
+```bash
+docker compose restart wodbooker
 ```
