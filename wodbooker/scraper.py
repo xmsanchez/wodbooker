@@ -248,6 +248,45 @@ class Scraper():
         epoch = int(midnight.timestamp())
         return self._book_request(f'{url}/athlete/handlers/LoadClass.ashx?ticks={epoch}'), epoch
 
+    def get_week_classes(self, url: str, start_date: datetime.date, athlete_id: str = None) -> dict:
+        """
+        Get classes for a week (7 days) starting from the given date
+        :param url: The WodBuster URL associated to the box where classes have to be obtained
+        :param start_date: The first day of the week (datetime.date)
+        :param athlete_id: Optional athlete ID to include in the API request (without dashes)
+        :return: A dictionary where keys are dates (datetime.date) and values are lists of class dictionaries.
+                 Each class dictionary contains: Hora, NombreE, IdE, Id, Borrable
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid
+        :raises PasswordRequired: If the provided cookie is outdated and a password is not provided
+        :raises RequestException: If a network error occurs or an HTTP error code is received
+        """
+        self.login()
+        week_classes = {}
+        
+        for day_offset in range(7):
+            current_date = start_date + datetime.timedelta(days=day_offset)
+            midnight = _UTC_TZ.localize(datetime.datetime.combine(current_date, datetime.datetime.min.time()))
+            epoch = int(midnight.timestamp())
+            
+            # Build API URL with optional athlete_id
+            api_url = f'{url}/athlete/handlers/LoadClass.ashx?ticks={epoch}'
+            if athlete_id:
+                # Remove dashes from athlete_id if present
+                athlete_id_no_dashes = athlete_id.replace('-', '')
+                api_url += f'&idu={athlete_id_no_dashes}'
+            
+            try:
+                response = self._book_request(api_url)
+                # Extract ListClases from response
+                list_clases = response.get('ListClases', [])
+                week_classes[current_date] = list_clases
+            except Exception as e:
+                logging.warning("Error fetching classes for date %s: %s", current_date, str(e))
+                week_classes[current_date] = []
+        
+        return week_classes
+
     def _book_request(self, url):
         try:
             request = self._session.get(url, headers=_HEADERS, allow_redirects=True, timeout=10)

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clases Próxima Semana - WodBooker</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary-color: #64748b;
+            --background-light: #f8fafc;
+            --background-white: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-light: #e2e8f0;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text-primary);
+            background-color: var(--background-light);
+            padding-top: 60px;
+        }
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        .navbar-brand {
+            font-weight: 600;
+            color: white !important;
+        }
+        .content {
+            background-color: var(--background-white);
+            margin: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            border: 1px solid var(--border-light);
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            margin-bottom: 0.5rem;
+        }
+        .weekday-header {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            margin-top: 0.75rem;
+            font-weight: 600;
+            color: #475569;
+            font-size: 1rem;
+        }
+        .card-header[data-toggle="collapse"]:hover {
+            background-color: #f8fafc;
+        }
+        .card-header[data-toggle="collapse"] .bi-chevron-down {
+            transition: transform 0.2s;
+        }
+        .card-header[data-toggle="collapse"][aria-expanded="true"] .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        .card-body > div:last-child {
+            border-bottom: none !important;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('booking.index_view') }}">
+                <i class="bi bi-calendar-check me-2"></i>WodBooker
+            </a>
+            {% if current_user.is_authenticated %}
+            <div class="navbar-nav ml-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button" data-toggle="dropdown">
+                        {% if current_user.profile_picture_url %}
+                            <img src="{{ current_user.profile_picture_url }}" alt="Profile" style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; object-fit: cover; vertical-align: middle;">
+                        {% else %}
+                            <i class="bi bi-person-circle" style="font-size: 1.2rem; margin-right: 8px;"></i>
+                        {% endif %}
+                        {{ current_user.email }}
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right">
+                        <a class="dropdown-item" href="{{ url_for('user.index_view') }}">Ver perfil</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="{{ url_for('admin.logout_view') }}">Cerrar Sesión</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <div class="content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 style="font-size: 1.75rem; font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">
+                    <i class="bi bi-calendar-week me-2"></i>Clases Próxima Semana
+                </h2>
+                <p style="color: #64748b; margin-bottom: 0;">
+                    Semana del {{ start_date.strftime('%d/%m/%Y') }} al {{ end_date.strftime('%d/%m/%Y') }}
+                </p>
+            </div>
+            <div>
+                <a class="btn btn-outline-secondary" href="{{ url_for('booking.index_view') }}" role="button">
+                    <i class="bi bi-arrow-left me-2"></i>Volver a Reservas
+                </a>
+            </div>
+        </div>
+
+        {% if week_classes %}
+            <div class="accordion" id="weeklyClassesAccordion">
+                {% for date in week_classes.keys()|sort %}
+                    {% set classes = week_classes[date] %}
+                    {% set dow = date.weekday() %}
+                    {% set day_id = 'day' ~ date.strftime('%Y%m%d') %}
+                    <div class="card" style="margin-bottom: 0.5rem;">
+                        <div class="card-header" id="heading{{ day_id }}" style="padding: 0.75rem 1rem; cursor: pointer;" data-toggle="collapse" data-target="#collapse{{ day_id }}" aria-expanded="false" aria-controls="collapse{{ day_id }}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span style="font-weight: 600; color: #475569; font-size: 1rem;">{{ DAYS_OF_WEEK[dow] }} {{ date.strftime('%d/%m/%Y') }}</span>
+                                    <span style="font-size: 0.875rem; font-weight: 400; margin-left: 0.75rem; color: #64748b;">
+                                        ({{ classes|length }} clase{{ 's' if classes|length != 1 else '' }})
+                                    </span>
+                                </div>
+                                <i class="bi bi-chevron-down" style="transition: transform 0.2s;"></i>
+                            </div>
+                        </div>
+                        <div id="collapse{{ day_id }}" class="collapse" aria-labelledby="heading{{ day_id }}" data-parent="#weeklyClassesAccordion">
+                            <div class="card-body" style="padding: 0.5rem 1rem;">
+                                {% if classes %}
+                                    {% for class_item in classes %}
+                                        <div class="d-flex align-items-center" style="padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9;">
+                                            <div style="min-width: 70px; font-weight: 600; color: #1e293b; font-size: 0.9rem;">
+                                                {{ class_item.time[:5] }}
+                                            </div>
+                                            <div style="flex: 1; margin-left: 1rem;">
+                                                <span class="badge" style="background-color: {{ class_item.color }}; color: white; font-size: 0.75rem; padding: 0.3rem 0.6rem; border-radius: 4px; font-weight: 500;">
+                                                    {{ class_item.type }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div style="padding: 1rem; text-align: center; color: #64748b;">
+                                        <i class="bi bi-calendar-x" style="font-size: 1.2rem; margin-bottom: 0.5rem; display: block;"></i>
+                                        <p style="margin-bottom: 0; font-size: 0.875rem;">No hay clases disponibles este día</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info" role="alert" style="margin-top: 2rem;">
+                <i class="bi bi-info-circle me-2"></i>
+                No se pudieron cargar las clases para la próxima semana.
+            </div>
+        {% endif %}
+
+        {% if box_url %}
+            <div class="mt-4" style="padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 0;">
+                    <i class="bi bi-box-arrow-in-up-right me-2"></i>
+                    Box: <a href="{{ box_url }}" target="_blank">{{ box_url }}</a>
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
