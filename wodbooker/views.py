@@ -327,17 +327,12 @@ class BookingAdmin(sqla.ModelView):
         if login.current_user.is_authenticated:
             from datetime import date, timedelta
             today = date.today()
-            # Calculate current week: Monday to Sunday
-            days_since_monday = today.weekday()  # 0 = Monday, 6 = Sunday
-            monday = today - timedelta(days=days_since_monday)
-            sunday = monday + timedelta(days=6)
             
-            # Get all WodBuster bookings for current week
+            # Get all WodBuster bookings from today onwards
             bookings = db.session.query(WodBusterBooking).filter(
                 WodBusterBooking.user_id == login.current_user.id,
                 WodBusterBooking.is_cancelled == False,
-                WodBusterBooking.class_date >= monday,
-                WodBusterBooking.class_date <= sunday
+                WodBusterBooking.class_date >= today
             ).order_by(WodBusterBooking.class_date, WodBusterBooking.class_time).all()
             
             # Process bookings to add color information
