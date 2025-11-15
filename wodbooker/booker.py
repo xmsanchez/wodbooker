@@ -21,6 +21,7 @@ from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
 from .models import db, Booking, Event, User, WodBusterBooking
+import re
 
 # Import high-level logger for important business events
 high_level_logger = logging.getLogger('high_level')
@@ -152,7 +153,7 @@ class Booker(StoppableThread):
         self._booking.last_book_date = day_to_book
         self._booking.booked_at = datetime.now().replace(microsecond=0)
         self._booking.user.cookie = scraper.get_cookies()
-        return errors, class_is_full_notification_sent
+        return event, errors, class_is_full_notification_sent
 
     def run(self) -> None:
         try:
@@ -222,31 +223,15 @@ class Booker(StoppableThread):
                     time_module.sleep(sleep_milliseconds)
 
                     if self._attempt_booking(datetime_to_book, scraper):
-                        errors, class_is_full_notification_sent = self._handle_successful_booking(day_to_book, scraper, errors, class_is_full_notification_sent)
+                        event, errors, class_is_full_notification_sent = self._handle_successful_booking(day_to_book, scraper, errors, class_is_full_notification_sent)
 
-                    # Send push notification for successful booking
-                    send_booking_status_notification(
-                        self._booking.user,
-                        self._booking,
-                        True,
-                        event.event
-                    )
-
-                    email = None
-                    if errors > 0:
-                        email = SuccessAfterErrorEmail(self._booking, ERROR_AUTOHEALED_MAIL_SUBJECT, ERROR_AUTOHEALED_MAIL_BODY)
-                        errors = 0
-
-                    if class_is_full_notification_sent:
-                        email = SuccessAfterErrorEmail(self._booking, FULL_CLASS_BOOKED_MAIL_SUBJECT, FULL_CLASS_BOOKED_MAIL_BODY)
-                        class_is_full_notification_sent = False
-
-                    email = email or SuccessEmail(self._booking, CLASS_BOOKED_MAIL_SUBJECT, CLASS_BOOKED_MAIL_BODY)
-                    # send_email(self._booking.user, email)
-
-                    self._booking.last_book_date = day_to_book
-                    self._booking.booked_at = datetime.now().replace(microsecond=0)
-                    self._booking.user.cookie = scraper.get_cookies()
+                        # Send push notification for successful booking
+                        send_booking_status_notification(
+                            self._booking.user,
+                            self._booking,
+                            True,
+                            event.event
+                        )
                 except ClassNotFound as e:
                     booking_attempts += 1
                     logging.warning("Class not found. Attempt %d/%d. Retrying in %d second. %s",
@@ -264,10 +249,30 @@ class Booker(StoppableThread):
                 # What's the API response and I won't risk it so I'll treat it as a "CLASS IS FULL" event
                 except BookingPenalization as e:
                     logging.warning("There is a penalty for your bookings this week: %s", e)
-                    # The minimum wait are 10 seconds, therefore let's sleep the thread for 10 seconds
-                    time_module.sleep(10)
-                    time_module.sleep(sleep_milliseconds)
-                    waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
+                    # Try to parse the waiting time from the error message
+                    wait_time = None
+                    # regex to match "1 minuto", "2 minutos", "1 segundo", "2 segundos" and "un minuto"
+                    match = re.search(r'((\d+)|un)\s+(minuto|minutos|segundo|segundos)', str(e))
+                    if match:
+                        value_str = match.group(1)
+                        if value_str == 'un':
+                            value = 1
+                        else:
+                            value = int(value_str)
+                        unit = match.group(3)
+                        if unit in ["minuto", "minutos"]:
+                            wait_time = value * 60
+                        else: # segundo, segundos
+                            wait_time = value
+                    
+                    if wait_time:
+                        logging.info(f"Waiting for {wait_time} seconds due to penalization.")
+                        time_module.sleep(wait_time)
+                    else:
+                        # The minimum wait are 10 seconds, therefore let's sleep the thread for 10 seconds
+                        time_module.sleep(10)
+                        time_module.sleep(sleep_milliseconds)
+                        waiter = _EventWaiter(self._booking, EventMessage.BOOKING_PENALIZATION % e,
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                 except BookingFailed as e:
                     logging.warning("Class cannot be booked %s", e)
@@ -536,7 +541,33 @@ def sync_wodbuster_bookings(user: User) -> dict:
         
         start_date = monday
         end_date = sunday
+
+        # Extend sync range to next week if booking windows are open
+        now = datetime.now(_MADRID_TZ)
+        user_bookings = db.session.query(Booking).filter_by(user_id=user.id).all()
         
+        next_monday = monday + timedelta(days=7)
+
+        earliest_opening_date = today
+
+        for booking in user_bookings:
+            # Date of the class next week
+            next_week_class_date = _get_next_date_for_weekday(next_monday, booking.dow)
+
+            # When the booking for that class opens
+            booking_opens_date = next_week_class_date - timedelta(days=booking.offset)
+            if booking.available_at:
+                booking_opens_datetime = _MADRID_TZ.localize(
+                    datetime.combine(booking_opens_date, booking.available_at)
+                )
+                earliest_opening_date = min(earliest_opening_date, booking_opens_date)
+
+                # If the booking window is already open, extend the sync period to include this class
+                if now >= booking_opens_datetime:
+                    end_date = max(end_date, next_week_class_date)
+        
+        start_date = earliest_opening_date
+
         new_count = 0
         updated_count = 0
         cancelled_count = 0

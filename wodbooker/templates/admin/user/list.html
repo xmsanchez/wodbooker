@@ -1,5 +1,24 @@
 {% extends 'admin/model/list.html' %}
 
+{% block head %}
+  {{ super() }}
+  <style>
+    .compact-card .card-header {
+      padding: 0.5rem 1rem;
+    }
+    .compact-card .card-body {
+      padding: 1rem;
+      font-size: 0.9rem;
+    }
+    .compact-card .card-body p {
+      margin-bottom: 0.5rem !important;
+    }
+    .compact-card .card-header h6 {
+      font-size: 1rem;
+    }
+  </style>
+{% endblock %}
+
 {% block model_menu_bar %}
   <div style="margin-bottom: 20px;">
     <a class="btn btn-primary" href="{{ get_url('.edit_view', id=data[0].id) }}" role="button">
@@ -10,48 +29,84 @@
 
 {% block model_list_table %}
 <div class="container-fluid">
-  <p>
-    <b>Usuario WodBuster</b><br/>
-    {{ data[0].email }}
-  </p>
-  <p>
-    <b>Fecha caducidad cookie WodBuster</b><br/>
-    {{ data[0].cookie_expiration_date }}
-  </p>
-  <p>
-    <b>Recibir notificaciones de reservas exitosas</b><br/>
-    {{ "Sí" if data[0].mail_permission_success else "No" }}
-  </p>
-  <p>
-    <b>Recibir notificaciones de fallos en reservas</b><br/>
-    {{ "Sí" if data[0].mail_permission_failure else "No" }}
-  </p>
-  
-  <hr style="margin: 20px 0; border-color: #e2e8f0;">
-  
-  <p>
-    <b>Notificaciones push habilitadas</b><br/>
-    {{ "Sí" if data[0].push_notifications_enabled else "No" }}
-  </p>
-  
-  {% if data[0].push_notifications_enabled %}
-  <p>
-    <b>Recordatorios activos:</b><br/>
-    {% if not data[0].push_reminder_1h and not data[0].push_reminder_30m and not data[0].push_reminder_15m %}
-      Ninguno
-    {% else %}
-      {% if data[0].push_reminder_1h %}1 hora{% if data[0].push_reminder_30m or data[0].push_reminder_15m %}, {% endif %}{% endif %}
-      {% if data[0].push_reminder_30m %}30 minutos{% if data[0].push_reminder_15m %}, {% endif %}{% endif %}
-      {% if data[0].push_reminder_15m %}15 minutos{% endif %}
-    {% endif %}
-  </p>
-  {% endif %}
-  
-  <p>
-    <b>Sincronización automática al cargar la página</b><br/>
-    {{ "Sí" if data[0].wodbuster_autosync_enabled else "No" }}
-  </p>
+  <!-- User Info -->
+  <div class="card mb-3 compact-card">
+    <div class="card-body">
+      <p class="mb-2">
+        <strong>Usuario WodBuster:</strong><br>
+        {{ data[0].email }}
+      </p>
+      <p class="mb-0">
+        <strong>Fecha caducidad cookie WodBuster:</strong><br>
+        {{ data[0].cookie_expiration_date }}
+      </p>
+    </div>
+  </div>
 
+  <!-- Preferencias Email -->
+  <div class="card mb-3 compact-card" style="border-left: 4px solid #2563eb;">
+    <div class="card-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
+      <h6 class="mb-0"><i class="bi bi-envelope me-2"></i> Preferencias Email</h6>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        <strong>Recibir notificaciones de reservas exitosas:</strong>
+        {{ "Sí" if data[0].mail_permission_success else "No" }}
+      </p>
+      <p class="mb-0">
+        <strong>Recibir notificaciones de fallos en reservas:</strong>
+        {{ "Sí" if data[0].mail_permission_failure else "No" }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Preferencias Notificaciones Push -->
+  <div class="card mb-3 compact-card" style="border-left: 4px solid #059669;">
+    <div class="card-header" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);">
+      <h6 class="mb-0"><i class="bi bi-bell me-2"></i> Preferencias Notificaciones Push</h6>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        <strong>Envío de notificaciones push habilitado:</strong>
+        {{ "Sí" if data[0].push_notifications_enabled else "No" }}
+      </p>
+      
+      {% if data[0].push_notifications_enabled %}
+      <hr>
+      <p class="mb-2">
+        <strong>Recibir notificaciones de reservas exitosas:</strong>
+        {{ "Sí" if data[0].push_permission_success else "No" }}
+      </p>
+      <p class="mb-2">
+        <strong>Recibir notificaciones de fallos en reservas:</strong>
+        {{ "Sí" if data[0].push_permission_failure else "No" }}
+      </p>
+      <hr>
+      <p class="mb-0">
+        <strong>Recordatorios activos:</strong>
+        {% if not data[0].push_reminder_1h and not data[0].push_reminder_30m and not data[0].push_reminder_15m %}
+          Ninguno
+        {% else %}
+          {% if data[0].push_reminder_1h %}1 hora{% if data[0].push_reminder_30m or data[0].push_reminder_15m %}, {% endif %}{% endif %}
+          {% if data[0].push_reminder_30m %}30 minutos{% if data[0].push_reminder_15m %}, {% endif %}{% endif %}
+          {% if data[0].push_reminder_15m %}15 minutos{% endif %}
+        {% endif %}
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Preferencias Sincronización -->
+  <div class="card mb-3 compact-card" style="border-left: 4px solid #f59e0b;">
+    <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+      <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h6>
+    </div>
+    <div class="card-body">
+      <p class="mb-0">
+        <strong>Sincronización automática al cargar la página:</strong>
+        {{ "Sí" if data[0].wodbuster_autosync_enabled else "No" }}
+      </p>
+    </div>
+  </div>
 </div>
-
 {% endblock %}
