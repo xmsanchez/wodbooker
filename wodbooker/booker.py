@@ -315,8 +315,8 @@ class Booker(StoppableThread):
                                             datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     if errors == 0:
                         send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
-                        #                                          UNEXPECTED_ERROR_MAIL_BODY))
-                        pass
+                                                                  UNEXPECTED_ERROR_MAIL_BODY))
+                        
                     errors += 1
                 except InvalidWodBusterResponse as e:
                     sleep_for = (errors + 1) * 60
@@ -324,9 +324,9 @@ class Booker(StoppableThread):
                     waiter = _TimeWaiter(self._booking, EventMessage.UNEXPECTED_WODBUSTER_RESPONSE % sleep_for,
                                          datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     if errors == 0:
-                        #send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
-                        #                                          UNEXPECTED_ERROR_MAIL_BODY))
-                        pass
+                        send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
+                                                                  UNEXPECTED_ERROR_MAIL_BODY))
+                        
                     errors += 1
                 except PasswordRequired:
                     force_exit = True
