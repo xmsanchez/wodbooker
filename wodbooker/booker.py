@@ -148,7 +148,7 @@ class Booker(StoppableThread):
             class_is_full_notification_sent = False
 
         email = email or SuccessEmail(self._booking, CLASS_BOOKED_MAIL_SUBJECT, CLASS_BOOKED_MAIL_BODY)
-        # send_email(self._booking.user, email)
+        send_email(self._booking.user, email)
 
         self._booking.last_book_date = day_to_book
         self._booking.booked_at = datetime.now().replace(microsecond=0)
@@ -225,13 +225,13 @@ class Booker(StoppableThread):
                     if self._attempt_booking(datetime_to_book, scraper):
                         event, errors, class_is_full_notification_sent = self._handle_successful_booking(day_to_book, scraper, errors, class_is_full_notification_sent)
 
-                        # Send push notification for successful booking
-                        send_booking_status_notification(
-                            self._booking.user,
-                            self._booking,
-                            True,
-                            event.event
-                        )
+                    # Send push notification for successful booking
+                    send_booking_status_notification(
+                        self._booking.user,
+                        self._booking,
+                        True,
+                        event.event
+                    )
                 except ClassNotFound as e:
                     booking_attempts += 1
                     logging.warning("Class not found. Attempt %d/%d. Retrying in %d second. %s",
@@ -288,13 +288,13 @@ class Booker(StoppableThread):
                         event.event
                     )
                     
-                    # send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
+                    send_email(self._booking.user, ErrorEmail(self._booking, "Error en la reserva", event.event))
                 except ClassIsFull:
                     logging.info("Class is full. Setting wait for event to 'changedBooking'")
                     waiter = _EventWaiter(self._booking, EventMessage.CLASS_FULL % day_to_book.strftime('%d/%m/%Y'),
                                           scraper, self._booking.url, day_to_book, ['changedBooking'], datetime_to_book)
                     if not class_is_full_notification_sent:
-                        # send_email(self._booking.user, ErrorEmail(self._booking, "Clase llena", waiter.log_message))
+                        send_email(self._booking.user, ErrorEmail(self._booking, "Clase llena", waiter.log_message))
                         class_is_full_notification_sent = True
                 except BookingNotAvailable as e:
                     if e.available_at:
@@ -314,7 +314,7 @@ class Booker(StoppableThread):
                     waiter = _TimeWaiter(self._booking, EventMessage.UNEXPECTED_NETWORK_ERROR % sleep_for,
                                             datetime.now(_MADRID_TZ) + timedelta(seconds=sleep_for))
                     if errors == 0:
-                        # send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
+                        send_email(self._booking.user, ErrorEmail(self._booking, UNEXPECTED_ERROR_MAIL_SUBJECT,
                         #                                          UNEXPECTED_ERROR_MAIL_BODY))
                         pass
                     errors += 1
@@ -334,20 +334,20 @@ class Booker(StoppableThread):
                     self._booking.user.force_login = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.CREDENTIALS_EXPIRED)
                     _add_event(event)
-                    # send_email(self._booking.user, ErrorEmail(self._booking, "Credenciales caducadas", event.event))
+                    send_email(self._booking.user, ErrorEmail(self._booking, "Credenciales caducadas", event.event))
                 except LoginError:
                     force_exit = True
                     logging.warning("User %s cannot be logged in into WodBuster. Aborting...", self._booking.user.email)
                     self._booking.user.force_login = True
                     event = Event(booking_id=self._booking.id, event=EventMessage.LOGIN_FAILED)
                     _add_event(event)
-                    # send_email(self._booking.user, ErrorEmail(self._booking, "Login fallido", event.event))
+                    send_email(self._booking.user, ErrorEmail(self._booking, "Login fallido", event.event))
                 except InvalidBox:
                     force_exit = True
                     logging.warning("User %s accessing to an invalid box detected. Aborting...", self._booking.user.email)
                     event = Event(booking_id=self._booking.id, event=EventMessage.INVALID_BOX_URL)
                     _add_event(event)
-                    # send_email(self._booking.user, ErrorEmail(self._booking, "Box inválido", event.event))
+                    send_email(self._booking.user, ErrorEmail(self._booking, "Box inválido", event.event))
                 finally:
                     db.session.commit()
 
@@ -567,7 +567,7 @@ def sync_wodbuster_bookings(user: User) -> dict:
                     end_date = max(end_date, next_week_class_date)
         
         start_date = earliest_opening_date
-
+        
         new_count = 0
         updated_count = 0
         cancelled_count = 0

@@ -17,8 +17,8 @@ from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView, UserView
 from .models import User, Booking, Event, db, PushSubscription, WodBusterBooking
-from .booker import start_booking_loop, sync_wodbuster_bookings
-from .scraper import get_scraper
+from .booker import start_booking_loop, stop_booking_loop, is_booking_running, sync_wodbuster_bookings, _get_next_date_for_weekday, _MADRID_TZ
+from .scraper import refresh_scraper, get_scraper
 from .constants import DAYS_OF_WEEK
 from .exceptions import InvalidWodBusterResponse, PasswordRequired, LoginError
 from .mailer import process_maling_queue
@@ -554,17 +554,29 @@ def weekly_classes():
             flash("No se encontró URL del box. Por favor, crea una reserva primero.", "error")
             return redirect(url_for('booking.index_view'))
         
-        # Calculate next week start date (next Monday or today if Monday)
+        # Calculate start date for the week to show
         today = datetime.now().date()
-        # weekday() returns 0 for Monday, 6 for Sunday
-        # Calculate days until next Monday
         days_until_monday = (7 - today.weekday()) % 7
-        if days_until_monday == 0:
-            # Today is Monday, start from today
-            start_date = today
-        else:
-            # Start from next Monday
-            start_date = today + timedelta(days=days_until_monday)
+        start_date = today + timedelta(days=days_until_monday if days_until_monday > 0 else 0)
+
+        # Check if we should instead show the week after the next one
+        now = datetime.now(_MADRID_TZ)
+        user_bookings = db.session.query(Booking).filter_by(user_id=user.id).all()
+        
+        should_show_next_week = False
+        for booking in user_bookings:
+            next_week_class_date = _get_next_date_for_weekday(start_date, booking.dow)
+            booking_opens_date = next_week_class_date - timedelta(days=booking.offset)
+            if booking.available_at:
+                booking_opens_datetime = _MADRID_TZ.localize(
+                    datetime.combine(booking_opens_date, booking.available_at)
+                )
+                if now >= booking_opens_datetime:
+                    should_show_next_week = True
+                    break
+        
+        if should_show_next_week:
+            start_date = start_date + timedelta(days=7)
         
         # Get scraper and fetch week classes
         scraper = get_scraper(user.email, user.cookie)
