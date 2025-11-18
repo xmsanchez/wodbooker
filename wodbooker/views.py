@@ -260,6 +260,53 @@ class BookingAdmin(sqla.ModelView):
         
         return redirect(url_for('booking.index_view'))
 
+    @expose("/cancel-wodbuster-booking", methods=("POST",))
+    def cancel_wodbuster_booking(self):
+        """Endpoint to cancel a WodBuster booking."""
+        if not login.current_user.is_authenticated:
+            flash("Debes iniciar sesión para cancelar reservas", "error")
+            return redirect(url_for('admin.login_view'))
+
+        booking_id = request.form.get("booking_id")
+        if not booking_id:
+            flash("ID de reserva no proporcionado", "error")
+            return redirect(url_for('booking.index_view'))
+
+        wb_booking = db.session.query(WodBusterBooking).filter_by(id=booking_id, user_id=login.current_user.id).first()
+
+        if not wb_booking:
+            flash("Reserva no encontrada o no autorizada", "error")
+            return redirect(url_for('booking.index_view'))
+
+        try:
+            scraper = get_scraper(login.current_user.email, login.current_user.cookie)
+            
+            # Combine date and time for the cancellation call
+            class_datetime = datetime.combine(wb_booking.class_date, wb_booking.class_time)
+
+            success = scraper.cancel_booking(
+                box_url=wb_booking.box_url,
+                class_id=wb_booking.class_id,
+                class_datetime=class_datetime,
+                athlete_id=login.current_user.athlete_id
+            )
+
+            if success:
+                # Mark as cancelled and sync
+                wb_booking.is_cancelled = True
+                db.session.commit()
+                flash("Reserva cancelada con éxito.", "success")
+                # Trigger a sync to refresh the state from WodBuster
+                sync_wodbuster_bookings(login.current_user)
+            else:
+                flash("Error al cancelar la reserva en WodBuster.", "error")
+
+        except Exception as e:
+            logging.exception("Error cancelling WodBuster booking")
+            flash(f"Error al cancelar la reserva: {str(e)}", "error")
+
+        return redirect(url_for('booking.index_view'))
+
     def get_list(self, *args, **kwargs):
         count, data = super().get_list(*args, **kwargs)
         for obj in data:

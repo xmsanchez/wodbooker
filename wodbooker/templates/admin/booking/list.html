@@ -198,6 +198,17 @@
                     <b>Sincronizado</b><br/>
                     {{ wb_booking.fetched_at.strftime('%d/%m/%Y %H:%M') if wb_booking.fetched_at else 'N/A' }}
                   </p>
+                  <div style="margin-top: 1rem;">
+                    <form method="POST" action="{{ url_for('booking.cancel_wodbuster_booking') }}" onsubmit="return confirm('¿Estás seguro de que quieres cancelar esta reserva?');" style="display: inline;">
+                      {% if csrf_token %}
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      {% endif %}
+                      <input type="hidden" name="booking_id" value="{{ wb_booking.id }}">
+                      <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash"></i> Cancelar Reserva
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
             </div>
