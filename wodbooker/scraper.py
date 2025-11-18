@@ -229,6 +229,45 @@ class Scraper():
 
         raise ClassNotFound(f"Class for {hour} not found on {booking_datetime.date().strftime('%d/%m/%Y')}")
 
+    def cancel_booking(self, box_url: str, class_id: int, class_datetime: datetime.datetime, athlete_id: str) -> bool:
+        """
+        Cancel a booked class.
+        :param box_url: The WodBuster URL for the box.
+        :param class_id: The ID of the class to cancel.
+        :param class_datetime: The date and time of the class to cancel.
+        :param athlete_id: The athlete ID of the user.
+        :return: True if the cancellation was successful, False otherwise.
+        """
+        self.login()
+        
+        # Convert class_datetime to UTC and get timestamp
+        utc_class_datetime = class_datetime.astimezone(_UTC_TZ)
+        ticks = int(utc_class_datetime.timestamp())
+        
+        # Athlete ID without dashes
+        idu = athlete_id.replace('-', '')
+        
+        # Cache-busting timestamp
+        cache_buster = int(datetime.datetime.now().timestamp() * 1000)
+        
+        # Construct the cancellation URL
+        cancel_url = f'{box_url}/athlete/handlers/Calendario_Borrar.ashx?id={class_id}&ticks={ticks}&idu={idu}&_={cache_buster}'
+        
+        logging.info("Attempting to cancel booking with URL: %s", cancel_url)
+        
+        try:
+            response = self._book_request(cancel_url)
+            if response.get('Res', {}).get('EsCorrecto'):
+                logging.info("Successfully cancelled booking for class %d", class_id)
+                return True
+            else:
+                error_message = response.get("Res", {}).get("ErrorMsg", "Unknown error")
+                logging.error("Failed to cancel booking for class %d: %s", class_id, error_message)
+                return False
+        except Exception as e:
+            logging.exception("An error occurred while cancelling booking for class %d", class_id)
+            return False
+
     def get_classes(self, url: str, date: datetime.date) -> tuple:
         """ 
         Get the classes for a given epoch
