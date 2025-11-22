@@ -218,7 +218,7 @@ class Scraper():
                 else:
                     logging.info("Booking failed.")
                     error_message = book_result.get("Res", {}).get("ErrorMsg")
-                    if "Penalización" in error_message:
+                    if "penalización" in error_message.lower() or "penalizaciones" in error_message.lower() or "demasiado pronto" in error_message.lower():
                         logging.info('Booking penalization.')
                         raise BookingPenalization(error_message)
                     elif "another place" in error_message.lower() or "otro lugar" in error_message.lower():
