@@ -77,10 +77,22 @@ def _get_datetime_to_book(last_booking_date: date, dow: int, booking_time: time)
     :return: The datetime to book
     """
     now = datetime.now(_MADRID_TZ)
-    base_date = now.date() if not last_booking_date else last_booking_date + timedelta(days=1)
+    today = now.date()
+    
+    # First, check if we can book for today
+    if not last_booking_date or last_booking_date < today:
+        # Check if today matches the target weekday and the class time hasn't passed
+        if today.weekday() == dow:
+            today_class_time = _MADRID_TZ.localize(datetime.combine(today, booking_time))
+            if now <= today_class_time:
+                return today_class_time
+    
+    # If we can't book for today, find the next occurrence
+    base_date = today if not last_booking_date else max(today, last_booking_date + timedelta(days=1))
     day_to_book = _get_next_date_for_weekday(base_date, dow)
     datetime_to_book = _MADRID_TZ.localize(datetime.combine(day_to_book, booking_time))
 
+    # Double-check: if the calculated time has passed, move to next week
     if now > datetime_to_book:
         day_to_book = _get_next_date_for_weekday(now.date() + timedelta(days=1), dow)
         datetime_to_book = _MADRID_TZ.localize(datetime.combine(day_to_book, booking_time))
