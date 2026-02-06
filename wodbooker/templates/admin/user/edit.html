@@ -218,6 +218,21 @@
               </div>
             {% endif %}
           </div>
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.auto_sync_training_descriptions(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.auto_sync_training_descriptions.id }}">
+                {{ form.auto_sync_training_descriptions.label.text }}
+              </label>
+            </div>
+            {% if form.auto_sync_training_descriptions.errors %}
+              <div class="text-danger">
+                {% for error in form.auto_sync_training_descriptions.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>

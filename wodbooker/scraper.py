@@ -12,6 +12,9 @@ from .exceptions import LoginError, InvalidWodBusterResponse, \
     BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
 
+# Training description logger (file-only, no console)
+training_desc_logger = logging.getLogger('training_descriptions')
+
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.3"
 }
@@ -617,6 +620,201 @@ class Scraper():
             raise InvalidWodBusterResponse('Error fetching booked classes') from e
         except Exception as e:
             logging.exception("Unexpected error fetching booked classes for user %s on date %s", self._user, date)
+            return []
+
+    @staticmethod
+    def _clean_html(text: str) -> str:
+        """
+        Clean HTML tags from text, preserving line breaks.
+        :param text: HTML text to clean
+        :return: Cleaned text with line breaks preserved
+        """
+        if not text:
+            return ""
+        
+        # Replace <br> and <br/> with newlines
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        
+        # Replace </p> with newline
+        text = text.replace('</p>', '\n')
+        
+        # Remove all remaining HTML tags
+        text = re.sub(r'<[^<]+?>', '', text)
+        
+        # Clean up multiple newlines
+        text = re.sub(r'\n\s*\n+', '\n\n', text)
+        
+        # Strip leading/trailing whitespace
+        return text.strip()
+
+    def get_training_descriptions(self, box_url: str, athlete_id: str, date: datetime.date) -> list:
+        """
+        Get training descriptions (ClasesDesc) for a specific date.
+        :param box_url: The WodBuster box URL (e.g., https://mayantibox.wodbuster.com)
+        :param athlete_id: The athlete ID with dashes (e.g., 4bbb52ac-6228-4194-a7e5-eb258c846adf)
+        :param date: The date to fetch training descriptions for
+        :return: List of dictionaries with training description information:
+                 [{'training_name': str, 'description': str, 'id_pizarra': int}, ...]
+        :raises LoginError: If user/password combination fails.
+        :raises InvalidWodBusterResponse: If the response from WodBuster is not valid
+        :raises RequestException: If a network error occurs
+        """
+        self.login()
+        
+        # Convert athlete_id from format with dashes to format without dashes
+        athlete_id_no_dashes = athlete_id.replace('-', '')
+        
+        # Calculate epoch timestamp for midnight UTC of the date
+        midnight = _UTC_TZ.localize(datetime.datetime.combine(date, datetime.datetime.min.time()))
+        epoch = int(midnight.timestamp())
+        
+        # Build the API URL
+        api_url = f'{box_url}/athlete/handlers/LoadClass.ashx?ticks={epoch}&idu={athlete_id_no_dashes}'
+        
+        try:
+            training_desc_logger.info("Fetching training descriptions for user %s, date %s, URL: %s", 
+                        self._user, date, api_url)
+            response = self._book_request(api_url)
+            
+            # Log response keys to see what we're getting
+            training_desc_logger.info("API response keys for date %s: %s", date, list(response.keys()))
+            
+            # Extract ClasesDesc from response (it's a JSON string)
+            clases_desc_raw = response.get('ClasesDesc', '[]')
+            
+            training_desc_logger.info("ClasesDesc raw value (first 200 chars) for date %s: %s", 
+                        date, str(clases_desc_raw)[:200] if clases_desc_raw else "None/Empty")
+            
+            if not clases_desc_raw or clases_desc_raw == '[]':
+                training_desc_logger.warning("No ClasesDesc in response for user %s on date %s. Response keys: %s", 
+                              self._user, date, list(response.keys()))
+                return []
+            
+            # Parse the JSON string
+            try:
+                pizarras = json.loads(clases_desc_raw)
+                training_desc_logger.info("Parsed %d pizarras from ClasesDesc for date %s", len(pizarras), date)
+            except json.JSONDecodeError as e:
+                training_desc_logger.error("Failed to parse ClasesDesc JSON for user %s on date %s: %s. Raw value: %s", 
+                             self._user, date, str(e), str(clases_desc_raw)[:500])
+                return []
+            
+            # Extract class data to match pizarras with actual class types
+            class_data = response.get('Data', [])
+            # Build a map of IdPizarra -> class type name (NombreE or Nombre from Valores)
+            pizarra_to_class_name = {}
+            for class_entry in class_data:
+                valores = class_entry.get('Valores', [])
+                for valor_data in valores:
+                    valor = valor_data.get('Valor', {})
+                    id_pizarra = valor.get('IdPizarra')
+                    if id_pizarra:
+                        # Try NombreE first (more specific), then Nombre
+                        class_name = valor_data.get('NombreE') or valor_data.get('Nombre', '')
+                        if class_name:
+                            # Store the first (or most specific) name we find for this pizarra
+                            if id_pizarra not in pizarra_to_class_name:
+                                pizarra_to_class_name[id_pizarra] = class_name
+                            elif valor_data.get('NombreE'):  # Prefer NombreE if available
+                                pizarra_to_class_name[id_pizarra] = class_name
+            
+            training_desc_logger.info("Mapped %d pizarras to class names: %s", 
+                        len(pizarra_to_class_name), pizarra_to_class_name)
+            
+            training_descriptions = []
+            
+            # Process each pizarra (training description)
+            for idx, pizarra in enumerate(pizarras):
+                id_pizarra = pizarra.get('IdPizarra')
+                description_html = pizarra.get('Descripcion', '')
+                
+                # Clean HTML from description first to extract training name
+                description_clean = self._clean_html(description_html)
+                
+                # Extract training name from description header (first line usually contains "WodMayanti Box", "MinimalMayanti Box", etc.)
+                training_name = None
+                header_line_removed = False
+                if description_clean:
+                    lines = description_clean.split('\n')
+                    first_line = lines[0].strip() if lines else ''
+                    
+                    training_desc_logger.info("Pizarra %d for date %s: First line of description: '%s'", idx, date, first_line[:100])
+                    
+                    # Look for pattern like "WodMayanti Box", "MinimalMayanti Box", "EnduranceMayanti Box"
+                    # Extract the training type (everything before "Mayanti Box" or similar box name)
+                    box_name_patterns = ['Mayanti Box', 'Box', 'CrossFit']
+                    for box_pattern in box_name_patterns:
+                        if box_pattern in first_line:
+                            # Extract everything before the box name
+                            training_name = first_line.split(box_pattern)[0].strip()
+                            training_desc_logger.info("Extracted training name '%s' from pattern '%s' in first line", training_name, box_pattern)
+                            # Remove the header line from description
+                            lines.pop(0)
+                            # Also remove empty line after header if present
+                            if lines and not lines[0].strip():
+                                lines.pop(0)
+                            description_clean = '\n'.join(lines).strip()
+                            header_line_removed = True
+                            break
+                    
+                    # If no box name pattern found, try to extract from first line
+                    # Common patterns: "Wod", "Minimal", "Endurance" at the start
+                    if not training_name and first_line and not header_line_removed:
+                        # Try to match common training types at the start (more comprehensive patterns)
+                        # Pattern order matters - try most specific first
+                        training_type_patterns = [
+                            r'^(Wod|WOD|Minimal|Endurance|Gymnastics|GAP|Open\s*Box|OpenBox)(?=[A-Z])',  # Training type immediately followed by capital letter (like "WodMayanti" - no space)
+                            r'^(Wod|WOD|Minimal|Endurance|Gymnastics|GAP|Open\s*Box|OpenBox)\s+',  # Training type followed by space
+                            r'^(Wod|WOD|Minimal|Endurance|Gymnastics|GAP|Open\s*Box|OpenBox)$',  # Just the training type
+                        ]
+                        for pattern in training_type_patterns:
+                            match = re.match(pattern, first_line, re.IGNORECASE)
+                            if match:
+                                training_name = match.group(1)
+                                training_desc_logger.info("Extracted training name '%s' using regex pattern '%s' from first line '%s'", 
+                                           training_name, pattern, first_line[:100])
+                                # Remove the header line from description
+                                lines.pop(0)
+                                # Also remove empty line after header if present
+                                if lines and not lines[0].strip():
+                                    lines.pop(0)
+                                description_clean = '\n'.join(lines).strip()
+                                header_line_removed = True
+                                break
+                
+                # Fallback to Data mapping, then Nombre from pizarra
+                if not training_name:
+                    training_name = pizarra_to_class_name.get(id_pizarra) or pizarra.get('Nombre', '')
+                    training_desc_logger.info("Using fallback training name '%s' (from Data mapping: %s, from pizarra Nombre: %s)", 
+                                training_name, 
+                                pizarra_to_class_name.get(id_pizarra),
+                                pizarra.get('Nombre', ''))
+                
+                training_desc_logger.info("Final training_name for pizarra %d (IdPizarra: %s): '%s' (extracted from description: %s)", 
+                            idx, id_pizarra, training_name, 'yes' if header_line_removed else 'no')
+                
+                if training_name:  # Only add if we have a training name
+                    training_descriptions.append({
+                        'training_name': training_name,
+                        'description': description_clean,
+                        'id_pizarra': id_pizarra
+                    })
+                    training_desc_logger.info("Added training description: %s (id_pizarra: %s, description length: %d)", 
+                                training_name, id_pizarra, len(description_clean))
+                else:
+                    training_desc_logger.warning("Skipping pizarra %d for date %s: no training name (IdPizarra: %s)", 
+                                  idx, date, id_pizarra)
+            
+            training_desc_logger.info("Found %d training descriptions for user %s on date %s: %s", 
+                        len(training_descriptions), self._user, date, 
+                        [td['training_name'] for td in training_descriptions])
+            return training_descriptions
+            
+        except requests.exceptions.RequestException as e:
+            logging.exception("Error fetching training descriptions for user %s on date %s", self._user, date)
+            raise InvalidWodBusterResponse('Error fetching training descriptions') from e
+        except Exception as e:
+            logging.exception("Unexpected error fetching training descriptions for user %s on date %s", self._user, date)
             return []
 
 

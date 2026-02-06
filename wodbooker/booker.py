@@ -20,11 +20,13 @@ from .push_notifications import send_booking_status_notification
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
-from .models import db, Booking, Event, User, WodBusterBooking
+from .models import db, Booking, Event, User, WodBusterBooking, ClassTrainingDescription
 import re
 
 # Import high-level logger for important business events
 high_level_logger = logging.getLogger('high_level')
+# Training description logger (file-only, no console)
+training_desc_logger = logging.getLogger('training_descriptions')
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
@@ -513,6 +515,115 @@ def is_booking_running(booking: Booking) -> bool:
     return booking.id in __CURRENT_THREADS and __CURRENT_THREADS[booking.id].is_alive()
 
 
+def sync_training_descriptions_for_date(user: User, target_date: date, box_url: str = None) -> dict:
+    """
+    Sync training descriptions for a specific date.
+    :param user: The user to sync training descriptions for
+    :param target_date: The date to sync training descriptions for
+    :param box_url: Optional box URL (if not provided, will be fetched)
+    :return: Dictionary with sync results: {'success': bool, 'new': int, 'updated': int, 'deleted': int, 'errors': list}
+    """
+    if not user.athlete_id:
+        logging.warning("Cannot sync training descriptions for user %s: no athlete_id", user.email)
+        return {'success': False, 'new': 0, 'updated': 0, 'deleted': 0, 'errors': ['No athlete_id set']}
+    
+    # Get box URL if not provided
+    if not box_url:
+        last_booking = db.session.query(Booking).filter_by(user_id=user.id).order_by(Booking.id.desc()).first()
+        if last_booking and last_booking.url:
+            box_url = last_booking.url
+        else:
+            try:
+                scraper = get_scraper(user.email, user.cookie)
+                box_url = scraper.get_box_url()
+            except Exception as e:
+                logging.warning("Could not get box URL for user %s: %s", user.email, str(e))
+                return {'success': False, 'new': 0, 'updated': 0, 'deleted': 0, 'errors': [f'Could not get box URL: {str(e)}']}
+    
+    if not box_url:
+        return {'success': False, 'new': 0, 'updated': 0, 'deleted': 0, 'errors': ['No box URL available']}
+    
+    try:
+        scraper = get_scraper(user.email, user.cookie)
+        training_desc_logger.info("Fetching training descriptions for user %s, date %s", user.email, target_date)
+        training_descriptions = scraper.get_training_descriptions(box_url, user.athlete_id, target_date)
+        training_desc_logger.info("Retrieved %d training descriptions from API for date %s", 
+                    len(training_descriptions), target_date)
+        
+        # Get existing training descriptions for this date
+        existing_descriptions = {
+            td.id_pizarra: td
+            for td in db.session.query(ClassTrainingDescription).filter_by(
+                user_id=user.id,
+                class_date=target_date
+            ).all()
+            if td.id_pizarra is not None
+        }
+        training_desc_logger.info("Found %d existing training descriptions in DB for date %s", 
+                    len(existing_descriptions), target_date)
+        
+        # Track which training descriptions we found (by id_pizarra)
+        found_id_pizarras = set()
+        new_count = 0
+        updated_count = 0
+        
+        for training_info in training_descriptions:
+            training_name = training_info['training_name']
+            id_pizarra = training_info.get('id_pizarra')
+            
+            # Skip if no id_pizarra (shouldn't happen, but be safe)
+            if id_pizarra is None:
+                logging.warning("Skipping training description without id_pizarra: %s for date %s", 
+                             training_name, target_date)
+                continue
+            
+            found_id_pizarras.add(id_pizarra)
+            
+            if id_pizarra in existing_descriptions:
+                # Update existing training description
+                existing = existing_descriptions[id_pizarra]
+                existing.training_name = training_name  # Update name in case it changed
+                existing.description = training_info.get('description')
+                existing.fetched_at = datetime.now()
+                updated_count += 1
+                training_desc_logger.info("Updated training description: %s (id_pizarra: %s) for date %s", 
+                           training_name, id_pizarra, target_date)
+            else:
+                # Create new training description
+                new_description = ClassTrainingDescription(
+                    user_id=user.id,
+                    class_date=target_date,
+                    training_name=training_name,
+                    description=training_info.get('description'),
+                    id_pizarra=id_pizarra,
+                    fetched_at=datetime.now()
+                )
+                db.session.add(new_description)
+                new_count += 1
+                training_desc_logger.info("Created new training description: %s (id_pizarra: %s) for date %s", 
+                           training_name, id_pizarra, target_date)
+        
+        # Delete training descriptions that are no longer in the API response
+        deleted_count = 0
+        for id_pizarra, existing_desc in existing_descriptions.items():
+            if id_pizarra not in found_id_pizarras:
+                db.session.delete(existing_desc)
+                deleted_count += 1
+                training_desc_logger.info("Deleted training description: %s (id_pizarra: %s) for date %s (no longer in API)", 
+                           existing_desc.training_name, id_pizarra, target_date)
+        
+        db.session.commit()
+        training_desc_logger.info("Training descriptions sync for date %s: %d new, %d updated, %d deleted", 
+                   target_date, new_count, updated_count, deleted_count)
+        
+        return {'success': True, 'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'errors': []}
+    except Exception as e:
+        db.session.rollback()
+        error_msg = f"Error syncing training descriptions for date {target_date}: {str(e)}"
+        logging.exception(error_msg)
+        return {'success': False, 'new': 0, 'updated': 0, 'deleted': 0, 'errors': [error_msg]}
+
+
 def sync_wodbuster_bookings(user: User) -> dict:
     """
     Sync WodBuster bookings for a user for the current week (Monday to Sunday).
@@ -580,14 +691,21 @@ def sync_wodbuster_bookings(user: User) -> dict:
         
         start_date = earliest_opening_date
         
+        # For training descriptions, always sync from Monday of current week
+        # (bookings might only sync from today if no bookings open earlier)
+        training_desc_start_date = monday
+        
         new_count = 0
         updated_count = 0
         cancelled_count = 0
         errors = []
         
         current_date = start_date
+        logging.info("Starting sync for dates from %s to %s", start_date, end_date)
         while current_date <= end_date:
             try:
+                logging.info("Processing date %s (day %d of sync range)", current_date, 
+                           (current_date - start_date).days + 1)
                 with db.session.begin_nested():
                     booked_classes = scraper.get_user_booked_classes(box_url, user.athlete_id, current_date)
                     
@@ -639,6 +757,89 @@ def sync_wodbuster_bookings(user: User) -> dict:
                             existing_booking.is_cancelled = True
                             existing_booking.fetched_at = datetime.now()
                             cancelled_count += 1
+                    
+                    # Fetch and store training descriptions for this date
+                    # Always sync training descriptions for the full current week (Monday to Sunday)
+                    # even if bookings sync starts later
+                    try:
+                        if current_date >= monday and current_date <= sunday:
+                            training_desc_logger.info("Fetching training descriptions for user %s, date %s", user.email, current_date)
+                            training_descriptions = scraper.get_training_descriptions(box_url, user.athlete_id, current_date)
+                        else:
+                            training_desc_logger.debug("Skipping training descriptions for date %s (outside current week %s to %s)", 
+                                        current_date, monday, sunday)
+                            training_descriptions = []
+                        training_desc_logger.info("Retrieved %d training descriptions from API for date %s", 
+                                   len(training_descriptions), current_date)
+                        
+                        # Get existing training descriptions for this date
+                        # Use id_pizarra as the key since multiple pizarras can have the same name
+                        existing_descriptions = {
+                            td.id_pizarra: td
+                            for td in db.session.query(ClassTrainingDescription).filter_by(
+                                user_id=user.id,
+                                class_date=current_date
+                            ).all()
+                            if td.id_pizarra is not None  # Only include records with id_pizarra
+                        }
+                        training_desc_logger.info("Found %d existing training descriptions in DB for date %s", 
+                                   len(existing_descriptions), current_date)
+                        
+                        # Track which training descriptions we found (by id_pizarra)
+                        found_id_pizarras = set()
+                        new_count = 0
+                        updated_count = 0
+                        
+                        for training_info in training_descriptions:
+                            training_name = training_info['training_name']
+                            id_pizarra = training_info.get('id_pizarra')
+                            
+                            # Skip if no id_pizarra (shouldn't happen, but be safe)
+                            if id_pizarra is None:
+                                logging.warning("Skipping training description without id_pizarra: %s for date %s", 
+                                             training_name, current_date)
+                                continue
+                            
+                            found_id_pizarras.add(id_pizarra)
+                            
+                            if id_pizarra in existing_descriptions:
+                                # Update existing training description
+                                existing = existing_descriptions[id_pizarra]
+                                existing.training_name = training_name  # Update name in case it changed
+                                existing.description = training_info.get('description')
+                                existing.fetched_at = datetime.now()
+                                updated_count += 1
+                                training_desc_logger.info("Updated training description: %s (id_pizarra: %s) for date %s", 
+                                           training_name, id_pizarra, current_date)
+                            else:
+                                # Create new training description
+                                new_description = ClassTrainingDescription(
+                                    user_id=user.id,
+                                    class_date=current_date,
+                                    training_name=training_name,
+                                    description=training_info.get('description'),
+                                    id_pizarra=id_pizarra,
+                                    fetched_at=datetime.now()
+                                )
+                                db.session.add(new_description)
+                                new_count += 1
+                                training_desc_logger.info("Created new training description: %s (id_pizarra: %s) for date %s", 
+                                           training_name, id_pizarra, current_date)
+                        
+                        # Delete training descriptions that are no longer in the API response
+                        deleted_count = 0
+                        for id_pizarra, existing_desc in existing_descriptions.items():
+                            if id_pizarra not in found_id_pizarras:
+                                db.session.delete(existing_desc)
+                                deleted_count += 1
+                                training_desc_logger.info("Deleted training description: %s (id_pizarra: %s) for date %s (no longer in API)", 
+                                           existing_desc.training_name, id_pizarra, current_date)
+                        
+                        training_desc_logger.info("Training descriptions sync for date %s: %d new, %d updated, %d deleted", 
+                                   current_date, new_count, updated_count, deleted_count)
+                    except Exception as e:
+                        # Log but don't fail the entire sync if training descriptions fail
+                        logging.exception("Error syncing training descriptions for date %s: %s", current_date, str(e))
                 
             except Exception as e:
                 error_msg = f"Error syncing date {current_date}: {str(e)}"
@@ -646,6 +847,72 @@ def sync_wodbuster_bookings(user: User) -> dict:
                 errors.append(error_msg)
             
             current_date += timedelta(days=1)
+        
+        # Also sync training descriptions for days before start_date but within current week
+        # (in case start_date is after Monday due to booking opening dates)
+        if start_date > monday:
+            training_desc_logger.info("Syncing training descriptions for earlier days in current week (%s to %s)", 
+                        monday, start_date - timedelta(days=1))
+            current_date = monday
+            while current_date < start_date:
+                try:
+                    with db.session.begin_nested():
+                        training_desc_logger.info("Fetching training descriptions for user %s, date %s (earlier week day)", 
+                                    user.email, current_date)
+                        training_descriptions = scraper.get_training_descriptions(box_url, user.athlete_id, current_date)
+                        training_desc_logger.info("Retrieved %d training descriptions from API for date %s", 
+                                   len(training_descriptions), current_date)
+                        
+                        # Get existing training descriptions for this date
+                        existing_descriptions = {
+                            td.id_pizarra: td
+                            for td in db.session.query(ClassTrainingDescription).filter_by(
+                                user_id=user.id,
+                                class_date=current_date
+                            ).all()
+                            if td.id_pizarra is not None
+                        }
+                        
+                        # Track which training descriptions we found (by id_pizarra)
+                        found_id_pizarras = set()
+                        
+                        for training_info in training_descriptions:
+                            training_name = training_info['training_name']
+                            id_pizarra = training_info.get('id_pizarra')
+                            
+                            if id_pizarra is None:
+                                logging.warning("Skipping training description without id_pizarra: %s for date %s", 
+                                             training_name, current_date)
+                                continue
+                            
+                            found_id_pizarras.add(id_pizarra)
+                            
+                            if id_pizarra in existing_descriptions:
+                                # Update existing training description
+                                existing = existing_descriptions[id_pizarra]
+                                existing.training_name = training_name
+                                existing.description = training_info.get('description')
+                                existing.fetched_at = datetime.now()
+                            else:
+                                # Create new training description
+                                new_description = ClassTrainingDescription(
+                                    user_id=user.id,
+                                    class_date=current_date,
+                                    training_name=training_name,
+                                    description=training_info.get('description'),
+                                    id_pizarra=id_pizarra,
+                                    fetched_at=datetime.now()
+                                )
+                                db.session.add(new_description)
+                        
+                        # Delete training descriptions that are no longer in the API response
+                        for id_pizarra, existing_desc in existing_descriptions.items():
+                            if id_pizarra not in found_id_pizarras:
+                                db.session.delete(existing_desc)
+                except Exception as e:
+                    logging.warning("Error syncing training descriptions for date %s: %s", current_date, str(e))
+                
+                current_date += timedelta(days=1)
         
         db.session.commit()
         logging.info("Sync completed for user %s: %d new, %d updated, %d cancelled", 

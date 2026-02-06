@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, date
 
 db = SQLAlchemy()
 
@@ -43,6 +43,7 @@ class User(db.Model):
     athlete_id = db.Column(db.String(128), nullable=True)
     profile_picture_url = db.Column(db.String(512), nullable=True)
     wodbuster_bookings = db.relationship('WodBusterBooking', backref='user', lazy=True, cascade="all, delete-orphan")
+    training_descriptions = db.relationship('ClassTrainingDescription', backref='user', lazy=True, cascade="all, delete-orphan")
     
     # Push notification settings
     push_notifications_enabled = db.Column(db.Boolean, default=False)
@@ -50,6 +51,7 @@ class User(db.Model):
     push_reminder_30m = db.Column(db.Boolean, default=False)
     push_reminder_15m = db.Column(db.Boolean, default=False)
     wodbuster_autosync_enabled = db.Column(db.Boolean, default=False)
+    auto_sync_training_descriptions = db.Column(db.Boolean, default=False)
     
     # Push notification subscriptions
     push_subscriptions = db.relationship('PushSubscription', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -122,3 +124,21 @@ class NotificationSent(db.Model):
     
     # Unique constraint to prevent duplicate notifications
     __table_args__ = (db.UniqueConstraint('wodbuster_booking_id', 'reminder_minutes', name='_booking_reminder_uc'),)
+
+
+class ClassTrainingDescription(db.Model):
+    __tablename__ = 'class_training_description'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    class_date = db.Column(db.Date, nullable=False, index=True)
+    training_name = db.Column(db.String(128), nullable=False)  # e.g., "WOD", "CROSSFIT", "OPEN BOX"
+    description = db.Column(db.Text, nullable=True)  # Cleaned text description
+    id_pizarra = db.Column(db.Integer, nullable=False)  # ID to link with class (required for uniqueness)
+    fetched_at = db.Column(db.DateTime, default=datetime.now)
+    
+    # Unique constraint to prevent duplicates per user, date, and id_pizarra
+    # Using id_pizarra instead of training_name because multiple pizarras can have the same name
+    __table_args__ = (db.UniqueConstraint('user_id', 'class_date', 'id_pizarra', name='_user_date_pizarra_uc'),)
+    
+    def __str__(self):
+        return f"{self.class_date.strftime('%d/%m/%Y')} - {self.training_name}"

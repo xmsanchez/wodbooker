@@ -102,9 +102,13 @@
       <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h6>
     </div>
     <div class="card-body">
-      <p class="mb-0">
+      <p class="mb-2">
         <strong>Sincronización automática al cargar la página:</strong>
         {{ "Sí" if data[0].wodbuster_autosync_enabled else "No" }}
+      </p>
+      <p class="mb-0">
+        <strong>Sincronización automática cuando no hay datos del entreno del día:</strong>
+        {{ "Sí" if data[0].auto_sync_training_descriptions else "No" }}
       </p>
     </div>
   </div>
