@@ -82,6 +82,23 @@ high_level_console_handler.setLevel(logging.INFO)
 high_level_console_handler.setFormatter(logging.Formatter(log_format))
 high_level_logger.addHandler(high_level_console_handler)
 
+# Create training description logger (file-only, no console)
+training_desc_logger = logging.getLogger('training_descriptions')
+training_desc_logger.setLevel(logging.INFO)
+training_desc_logger.propagate = False  # Don't propagate to root logger
+
+# Training description file handler (only file, no console)
+training_desc_file_handler = TimedRotatingFileHandler(
+    log_file,  # Same file as main logger
+    when='midnight',
+    interval=1,
+    backupCount=7,
+    encoding='utf-8'
+)
+training_desc_file_handler.setLevel(logging.INFO)
+training_desc_file_handler.setFormatter(logging.Formatter(log_format))
+training_desc_logger.addHandler(training_desc_file_handler)
+
 # Configure Flask/Werkzeug loggers to WARNING level to filter out HTTP request noise
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 logging.getLogger('flask').setLevel(logging.WARNING)

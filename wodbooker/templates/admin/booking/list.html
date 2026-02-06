@@ -218,6 +218,61 @@
     </div>
   {% endif %}
   
+  {% if training_descriptions_by_date %}
+    <div class="mt-4">
+      <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem;">
+        <i class="bi bi-list-ul me-2"></i> Entrenos del día
+      </h3>
+      <div class="accordion" id="trainingDescriptionsAccordion">
+        {% for desc_date, descriptions in training_descriptions_by_date %}
+          {% set desc_dow = desc_date.weekday() %}
+          <div class="weekday-header" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #fcd34d; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #92400e; font-size: 1rem;">
+            <span>{{ DAYS_OF_WEEK[desc_dow] }} {{ desc_date.strftime('%d/%m/%Y') }}</span>
+          </div>
+          {% for desc in descriptions %}
+            {% set is_same_date_as_prev = loop.index0 > 0 %}
+            {% set has_description = desc.formatted_description or desc.description %}
+            {% set desc_id = desc.id if desc.id is defined and desc.id else ('temp_' + loop.index0|string) %}
+            <div class="card" style="margin-bottom: {% if is_same_date_as_prev %}0.25rem{% else %}0.5rem{% endif %}; border-left: 4px solid #f59e0b;">
+              <div class="card-header" id="headingTD{{desc_id}}" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+                <h2 class="mb-0" style="margin-bottom: 0; width: 100%;">
+                  {% if has_description %}
+                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseTD{{desc_id}}" aria-expanded="false" aria-controls="collapseTD{{desc_id}}" style="padding: 0; text-decoration: none; width: 100%; text-align: left;">
+                      <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600; color: #92400e; text-align: left;">
+                        {{ desc.training_name }}
+                      </h4>
+                    </button>
+                  {% else %}
+                    <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600; color: #92400e; text-align: left;">
+                      {{ desc.training_name }} - Aún no hay el entreno disponible
+                    </h4>
+                  {% endif %}
+                </h2>
+              </div>
+              {% if has_description %}
+                <div id="collapseTD{{desc_id}}" class="collapse" aria-labelledby="headingTD{{desc_id}}" data-parent="#trainingDescriptionsAccordion">
+                  <div class="card-body" style="padding: 0.75rem 1rem;">
+                    <div class="container-fluid" style="padding: 0;">
+                      {% if desc.formatted_description %}
+                        <div style="white-space: pre-wrap; color: #1e293b; line-height: 1.2; margin: 0; padding: 0;">
+                          {{ desc.formatted_description|safe }}
+                        </div>
+                      {% elif desc.description %}
+                        <div style="white-space: pre-wrap; color: #1e293b; line-height: 1.2; margin: 0; padding: 0;">
+                          {{ desc.description }}
+                        </div>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  
   <!-- Auto-sync loading indicator -->
   <div id="autosync-loading" style="display: none; text-align: center; padding: 10px;">
     <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Sincronizando reservas de WodBuster...
