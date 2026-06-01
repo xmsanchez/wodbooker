@@ -1,0 +1,41 @@
+---
+description: Flask-Admin UI and user-facing views
+globs: wodbooker/views.py,wodbooker/templates/**
+alwaysApply: false
+---
+
+# Admin UI
+
+## Structure
+
+- `MyAdminIndexView` — `/`, `/login/`, `/logout/`
+- `BookingAdmin` — Reservas (main CRUD + custom actions)
+- `UserView` — Preferencias (notification/sync flags only)
+- `EventView` — hidden read-only audit log
+
+## Access control
+
+- `is_accessible()` requires Flask-Login.
+- All queries scoped to `login.current_user.id`.
+- Max 30 bookings per user.
+
+## Custom endpoints (BookingAdmin)
+
+- `POST .../active` — toggle `is_active` + start/stop Booker
+- `POST .../sync-wodbuster-bookings`
+- `POST .../cancel-wodbuster-booking`
+
+## Templates
+
+- Custom list/edit under `wodbooker/templates/admin/booking/`
+- Base: `wodbooker/templates/base.html` (Bootstrap 4)
+
+## i18n
+
+- Flask-Babel; default locale `es`; `?lang=` stored in session.
+
+## New UI fields
+
+1. `BookingForm` / `UserForm` in `views.py`
+2. Template if not auto-rendered
+3. If persisted → model + migration (skill `db-migration`)
