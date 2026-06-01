@@ -1,0 +1,37 @@
+---
+description: Booking threads, waiters, and sync orchestration
+globs: wodbooker/booker.py,wodbooker/notification_scheduler.py
+alwaysApply: false
+---
+
+# Booker conventions
+
+## Lifecycle
+
+- `start_booking_loop(booking)` / `stop_booking_loop(booking)` — register `Booker` in `__CURRENT_THREADS`.
+- CRUD on active bookings in `views.py` must start/stop threads to match `is_active`.
+- Always use `app.app_context()` inside threads; reload `Booking` from DB each loop iteration.
+
+## Booking loop (summary)
+
+1. `_get_datetime_to_book(last_book_date, dow, time)` — next class in Madrid TZ.
+2. `_TimeWaiter` until booking window (`offset` + `available_at`).
+3. `get_scraper(email, cookie)` → `scraper.book(url, datetime, type_class)`.
+4. Success → update `last_book_date`, `booked_at`, persist `user.cookie`, notify mail/push.
+
+## Waiters
+
+- `_TimeWaiter` — sleep until datetime (window, penalization backoff, network retry).
+- `_EventWaiter` — `scraper.wait_until_event` for SSE (`changedBooking`, `changedPizarra`).
+
+## Sync (no Booker thread)
+
+- `sync_wodbuster_bookings(user)` — mirror API bookings into `WodBusterBooking`.
+- `sync_training_descriptions_for_date(user, date)` — `ClassTrainingDescription` cache.
+
+## When changing behavior
+
+- Exception handling matrix: [docs/wodbuster-integration.md](../docs/wodbuster-integration.md)
+- User-visible log strings: `constants.EventMessage`
+- Full flow: [docs/booking-flow.md](../docs/booking-flow.md)
+- Use skill `booking-behavior-change` for checklist.

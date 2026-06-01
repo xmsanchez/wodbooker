@@ -1,0 +1,35 @@
+---
+description: SQLite schema migrations
+globs: migrations/**/*.sql,migrate.py,wodbooker/models.py
+alwaysApply: false
+---
+
+# Migrations
+
+## Layout
+
+- `migrations/vX.Y.Z/*.sql` — one folder per release; multiple `.sql` files allowed.
+- Optional `rollback_*.sql` (manual only; `migrate.py` has no rollback command).
+
+## Apply
+
+```bash
+python migrate.py v1.12.0
+```
+
+DB resolution order: `instance/db.sqlite` → `db.sqlite` → `wodbooker/db.sqlite`.
+
+## Workflow
+
+1. Add column/table in SQL under new `migrations/vX.Y.Z/`.
+2. Update SQLAlchemy model in `models.py`.
+3. Run `migrate.py`; idempotent skips for "duplicate column" / "already exists".
+4. Add rollback SQL if destructive.
+
+## Startup auto-migration
+
+Only **v1.9.0** (push columns) runs automatically in `__init__.py` if `push_notifications_enabled` missing. New versions must be run manually.
+
+## Skill
+
+Follow `.cursor/skills/db-migration/SKILL.md` for every schema change.

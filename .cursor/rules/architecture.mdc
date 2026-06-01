@@ -1,0 +1,40 @@
+---
+description: WodBooker core architecture and module map
+alwaysApply: true
+---
+
+# WodBooker architecture
+
+Flask app that auto-books WodBuster classes. Bootstrap: `wodbooker/__init__.py` (import side effects). Entry: `app.py` → `from wodbooker import app`.
+
+## Module map
+
+| Task | Start here |
+|------|------------|
+| Booking logic / threads | `wodbooker/booker.py` → [booking-flow.md](../docs/booking-flow.md) |
+| WodBuster API / login | `wodbooker/scraper.py` → [wodbuster-integration.md](../docs/wodbuster-integration.md) |
+| DB schema | `wodbooker/models.py` + `migrations/` → skill `db-migration` |
+| Admin UI / login | `wodbooker/views.py`, `wodbooker/templates/` |
+| Push / email | `push_notifications.py`, `notification_scheduler.py`, `mailer.py` |
+| Routes / startup | `wodbooker/__init__.py` |
+
+## Invariants
+
+- **Timezone**: `Europe/Madrid` (`booker._MADRID_TZ`) for all booking datetimes.
+- **Threads**: One `Booker` per active `Booking`; global lock `_GLOBAL_BOOKING_LOCK` (min 0.5s between any user's book attempts).
+- **Whitelist**: `BOOKING_WHITELIST_EMAILS` — if non-empty, only listed emails can start booking loops.
+- **Admin URL**: Flask-Admin at `/` (not `/admin`). `/admin/*` redirects to `/`.
+- **DB file**: `wodbooker/db.sqlite` (SQLAlchemy URI in `__init__.py`).
+- **Do not** duplicate Docker/SSL/VAPID setup — see [README.md](../README.md).
+
+## Background work at startup
+
+1. Restart `Booker` for each `Booking` where `is_active`.
+2. `dbcleaner` — delete `Event` rows older than 15 days (daily).
+3. `mailer` — drain email queue.
+4. `notification_scheduler` — push reminders every 60s.
+
+## Docs
+
+- [AGENTS.md](../AGENTS.md) — quick start for agents
+- [docs/architecture.md](../docs/architecture.md) — full detail

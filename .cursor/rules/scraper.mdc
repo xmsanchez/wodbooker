@@ -1,0 +1,38 @@
+---
+description: WodBuster HTTP client and domain exceptions
+globs: wodbooker/scraper.py,wodbooker/exceptions.py
+alwaysApply: false
+---
+
+# Scraper conventions
+
+## Instances
+
+- `get_scraper(email, cookie)` — cached singleton per email (booking path; no password).
+- `refresh_scraper(email, password)` — login + replace cache (login form only).
+
+## Auth
+
+- Session via `cloudscraper`; cookies pickled on `User.cookie`.
+- Stale cookie without password → `PasswordRequired`.
+- Login failure → `LoginError`; API 302 to login → `InvalidBox`.
+
+## Key methods
+
+| Method | Use |
+|--------|-----|
+| `book` | Auto-reserve class |
+| `cancel_booking` | User-initiated cancel |
+| `get_classes` / `get_week_classes` | Schedule UI |
+| `wait_until_event` | SSE wait for class availability |
+| `get_user_booked_classes` | Sync |
+| `get_training_descriptions` | WOD text cache |
+
+## Exceptions
+
+All defined in `exceptions.py`; raised from `scraper.py`. Booker maps each to wait/retry/abort — see [docs/wodbuster-integration.md](../docs/wodbuster-integration.md).
+
+## Safety
+
+- Use `_safe_log_response_content` for logs; never log full cookies/passwords.
+- WodBuster HTML/JSON formats are fragile — preserve existing parsing patterns.

@@ -147,3 +147,5 @@ nginx/letsencrypt/**
 nginx/nginx.conf
 
 logs
+
+docker-compose.yaml
