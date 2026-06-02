@@ -817,6 +817,94 @@ class Scraper():
             logging.exception("Unexpected error fetching training descriptions for user %s on date %s", self._user, date)
             return []
 
+    def _ui_api_headers(self, box_url: str) -> dict:
+        return {
+            **_HEADERS,
+            'Accept': 'application/json, text/plain, */*',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': f'{box_url.rstrip("/")}/athlete/reservas.aspx',
+        }
+
+    def _warmup_athlete_ui(self, box_url: str) -> None:
+        try:
+            self._session.get(
+                f'{box_url.rstrip("/")}/athlete/reservas.aspx',
+                headers=_HEADERS,
+                allow_redirects=True,
+                timeout=10,
+            )
+        except requests.exceptions.RequestException as e:
+            logging.debug('Athlete UI warmup failed (non-fatal): %s', e)
+
+    def _ui_api_request(self, box_url: str, endpoint: str, params: dict):
+        self.login()
+        self._warmup_athlete_ui(box_url)
+        base = f'{box_url.rstrip("/")}/api/ui/{endpoint}'
+        headers = self._ui_api_headers(box_url)
+        idu = params.get('id') or params.get('idu')
+        param_variants = []
+        if idu:
+            rest = {k: v for k, v in params.items() if k not in ('id', 'idu')}
+            param_variants.append({**rest, 'id': idu})
+            param_variants.append({**rest, 'idu': idu})
+        else:
+            param_variants.append(params)
+
+        last_error = None
+        for query in param_variants:
+            try:
+                request = self._session.get(
+                    base, params=query, headers=headers,
+                    allow_redirects=True, timeout=15,
+                )
+                if request.status_code == 302 and 'login' in request.headers.get('Location', ''):
+                    raise InvalidBox('Provided URL is not accesible for the given user')
+                if request.status_code != 200:
+                    logging.warning(
+                        'WodBuster UI API non-200. endpoint=%s params=%s status=%d body=%s',
+                        endpoint, query, request.status_code,
+                        _safe_log_response_content(request.text, 500),
+                    )
+                    last_error = InvalidWodBusterResponse(
+                        f'Invalid response status from WodBuster UI API ({request.status_code})',
+                    )
+                    continue
+                return request.json()
+            except requests.exceptions.JSONDecodeError as e:
+                logging.warning('WodBuster UI API non-JSON: %s', e)
+                last_error = InvalidWodBusterResponse('WodBuster UI API returned non-JSON')
+            except requests.exceptions.RequestException as e:
+                logging.warning('WodBuster UI API network error: %s', e)
+                last_error = InvalidWodBusterResponse('WodBuster UI API network error')
+
+        if last_error:
+            raise last_error
+        raise InvalidWodBusterResponse('WodBuster UI API request failed')
+
+    @staticmethod
+    def calendar_month_epoch_range(year: int, month: int) -> tuple:
+        start = _UTC_TZ.localize(datetime.datetime(year, month, 1))
+        if month == 12:
+            end = _UTC_TZ.localize(datetime.datetime(year + 1, 1, 1))
+        else:
+            end = _UTC_TZ.localize(datetime.datetime(year, month + 1, 1))
+        return int(start.timestamp()), int(end.timestamp())
+
+    def get_athlete_services(self, box_url: str, athlete_id: str) -> dict:
+        idu = athlete_id.replace('-', '')
+        return self._ui_api_request(box_url, 'Master_MisServicios', {'id': idu})
+
+    def get_athlete_reservations_range(
+        self, box_url: str, athlete_id: str,
+        desde_epoch: int, hasta_epoch: int,
+    ) -> list:
+        idu = athlete_id.replace('-', '')
+        return self._ui_api_request(
+            box_url,
+            'Master_MisServicios_Reservas',
+            {'id': idu, 'desdeEpoch': desde_epoch, 'hastaEpoch': hasta_epoch},
+        )
+
 
 __SCRAPERS = {}
 

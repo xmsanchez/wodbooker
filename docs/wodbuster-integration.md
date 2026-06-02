@@ -59,8 +59,21 @@ Common events:
 |--------|-----|-----------|
 | `get_user_booked_classes` | `LoadClass.ashx?ticks=&idu=` | `WodBusterBooking` |
 | `get_training_descriptions` | `LoadClass.ashx` (parses `ClasesDesc`) | `ClassTrainingDescription` |
+| `get_athlete_services` | `/api/ui/Master_MisServicios` | `AthleteMonthlyStats` (quota + billing-period cancellations) |
+| `get_athlete_reservations_range` | `/api/ui/Master_MisServicios_Reservas` | `AthleteMonthlyStats` (per calendar month, immutable once cached) |
 
 Requires `user.athlete_id` (set at login from `preferences.aspx`).
+
+### Attendance metrics (do not confuse)
+
+| Metric | Source | Meaning |
+|--------|--------|---------|
+| **Créditos 16/16** | `TarifaDesc[].Reservas.DeUsuario/DeTarifa` | Billing-period **credits used**, not “classes booked this month” |
+| **Reservadas / Asistidas (mes)** | Calendar-month filter on class datetimes | Classes in the current calendar month |
+| **Cancelaciones (facturación)** | `Borrada` in `Master_MisServicios` | Cancellations in the **billing period** |
+| **Canceladas (mes)** | `Borrada` filtered to calendar month | Only when `Master_MisServicios` is available for that month |
+
+UI APIs use `_ui_api_request` (SPA headers + `reservas.aspx` warmup). Historical months are fetched once via `POST /api/attendance/backfill` and not re-fetched on autosync.
 
 ## Exception → Booker action matrix
 

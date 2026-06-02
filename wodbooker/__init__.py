@@ -17,7 +17,15 @@ from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView, UserView
 from .models import User, Booking, Event, db, PushSubscription, WodBusterBooking
-from .booker import start_booking_loop, stop_booking_loop, is_booking_running, sync_wodbuster_bookings, _get_next_date_for_weekday, _MADRID_TZ
+from .booker import start_booking_loop, stop_booking_loop, is_booking_running, _get_next_date_for_weekday, _MADRID_TZ
+from .attendance_stats import (
+    sync_wodbuster_all,
+    get_attendance_dashboard,
+    get_attendance_history,
+    dashboard_to_api,
+    manual_backfill_history,
+    regenerate_history,
+)
 from .scraper import refresh_scraper, get_scraper
 from .constants import DAYS_OF_WEEK
 from .exceptions import InvalidWodBusterResponse, PasswordRequired, LoginError
@@ -142,69 +150,97 @@ app.config['VAPID_CLAIM_EMAIL'] = os.environ.get('VAPID_CLAIM_EMAIL', 'mailto:ad
 app_dir = op.realpath(os.path.dirname(__file__))
 database_path = op.join(app_dir, app.config['DATABASE_FILE'])
 
-# Check and run migration BEFORE initializing SQLAlchemy to avoid model metadata issues
+def _migrations_root():
+    return op.join(op.dirname(op.dirname(app_dir)), 'migrations')
+
+
+def _execute_sqlite_script(conn, script: str) -> None:
+    import sqlite3
+    cursor = conn.cursor()
+    for statement in [s.strip() for s in script.split(';') if s.strip()]:
+        try:
+            cursor.execute(statement)
+        except sqlite3.OperationalError as e:
+            error_msg = str(e).lower()
+            if 'duplicate column' in error_msg or 'already exists' in error_msg:
+                logging.warning("Migration skip (already applied): %s", statement[:60])
+                continue
+            logging.error("Migration error: %s", e)
+            logging.error("Statement: %s", statement[:200])
+            raise
+
+
+def _run_migration_sql_files(database_path: str, version: str, filenames: list) -> None:
+    import sqlite3
+    migration_dir = op.join(_migrations_root(), version)
+    conn = sqlite3.connect(database_path)
+    try:
+        for filename in filenames:
+            path = op.join(migration_dir, filename)
+            if not os.path.exists(path):
+                raise FileNotFoundError(
+                    f'Migration script not found: {path}. '
+                    f'Run manually: python migrate.py {version}',
+                )
+            logging.info('Running migration %s (%s)...', version, filename)
+            with open(path, 'r', encoding='utf-8') as f:
+                _execute_sqlite_script(conn, f.read())
+        conn.commit()
+        logging.info('Migration %s completed successfully', version)
+    finally:
+        conn.close()
+
+
+def _apply_pending_sqlite_migrations(database_path: str) -> None:
+    """Apply additive migrations before SQLAlchemy loads models (same pattern as v1.9.0)."""
+    import sqlite3
+
+    def _user_columns():
+        conn = sqlite3.connect(database_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA table_info(user)')
+            return {row[1] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def _has_table(table_name: str) -> bool:
+        conn = sqlite3.connect(database_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            )
+            return cursor.fetchone() is not None
+        finally:
+            conn.close()
+
+    if 'push_notifications_enabled' not in _user_columns():
+        _run_migration_sql_files(database_path, 'v1.9.0', ['push_notifications.sql'])
+
+    if not _has_table('athlete_monthly_stats'):
+        _run_migration_sql_files(
+            database_path, 'v1.13.0', ['athlete_monthly_stats.sql'],
+        )
+
+    if 'attendance_history_from' not in _user_columns():
+        _run_migration_sql_files(
+            database_path, 'v1.13.1', ['attendance_history_from.sql'],
+        )
+
+
+# Check and run migrations BEFORE initializing SQLAlchemy to avoid model metadata issues
 if os.path.exists(database_path):
     import sqlite3
-    migration_needed = False
     try:
-        # Check if migration is needed using raw SQLite connection
-        conn = sqlite3.connect(database_path)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(user)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if 'push_notifications_enabled' not in columns:
-            migration_needed = True
-        conn.close()
+        _apply_pending_sqlite_migrations(database_path)
     except Exception as e:
-        logging.warning("Could not check migration status: %s", str(e))
-        # Assume migration is needed if we can't check
-        migration_needed = True
-    
-    if migration_needed:
-        logging.info("Running migration v1.9.0...")
-        try:
-            import os as os_module
-            # Read migration script
-            migration_dir = op.join(op.dirname(op.dirname(app_dir)), 'migrations', 'v1.9.0')
-            migration_file = op.join(migration_dir, 'push_notifications.sql')
-            
-            if not os_module.path.exists(migration_file):
-                logging.error("Migration script not found at %s", migration_file)
-                logging.error("Please run manually: python migrate.py v1.9.0")
-                raise Exception("Migration script not found")
-            
-            with open(migration_file, 'r', encoding='utf-8') as f:
-                script = f.read()
-            
-            # Execute migration using raw SQLite connection
-            conn = sqlite3.connect(database_path)
-            cursor = conn.cursor()
-            
-            script_statements = [s.strip() for s in script.split(";") if s.strip()]
-            for statement in script_statements:
-                if not statement:
-                    continue
-                try:
-                    cursor.execute(statement)
-                except sqlite3.OperationalError as e:
-                    error_msg = str(e).lower()
-                    if 'duplicate column' in error_msg or 'already exists' in error_msg:
-                        logging.warning("Column or table already exists, skipping: %s", statement[:50])
-                        continue
-                    # Re-raise if it's a different error
-                    logging.error("Migration error: %s", str(e))
-                    logging.error("Statement: %s", statement[:200])
-                    conn.close()
-                    raise
-            
-            conn.commit()
-            conn.close()
-            logging.info("Migration v1.9.0 completed successfully")
-            
-        except Exception as e:
-            logging.error("Error running migration v1.9.0: %s", str(e))
-            logging.error("Please run manually: python migrate.py v1.9.0")
-            raise  # Fail startup if migration fails
+        logging.error('Error running pending migrations: %s', e)
+        logging.error(
+            'Run manually: python migrate.py v1.13.0 && python migrate.py v1.13.1',
+        )
+        raise
 
 # Now initialize SQLAlchemy (after migration is complete)
 if not os.path.exists(database_path):
@@ -520,14 +556,15 @@ def wodbuster_sync():
     Note: Exempted from CSRF as it's already protected by login_required
     """
     try:
-        result = sync_wodbuster_bookings(login.current_user)
+        result = sync_wodbuster_all(login.current_user)
         if result['success']:
             return jsonify({
                 'success': True,
                 'new': result['new'],
                 'updated': result['updated'],
                 'cancelled': result['cancelled'],
-                'message': f"Sincronización completada: {result['new']} nuevas, {result['updated']} actualizadas, {result['cancelled']} canceladas"
+                'message': "Sincronización completada",
+                'attendance': result.get('attendance'),
             }), 200
         else:
             error_msg = "; ".join(result['errors'])
@@ -541,6 +578,58 @@ def wodbuster_sync():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@app.route('/api/attendance/dashboard')
+@login.login_required
+def attendance_dashboard_api():
+    return jsonify(dashboard_to_api(login.current_user)), 200
+
+
+@app.route('/api/attendance/history')
+@login.login_required
+def attendance_history_api():
+    data = get_attendance_history(login.current_user)
+    if data is None:
+        return jsonify({'available': False}), 200
+    return jsonify({'available': True, **data}), 200
+
+
+@app.route('/api/attendance/backfill', methods=['POST'])
+@login.login_required
+@csrf.exempt
+def attendance_backfill_api():
+    try:
+        return jsonify(manual_backfill_history(login.current_user)), 200
+    except Exception as e:
+        logging.exception('Attendance backfill failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/attendance/regenerate-history', methods=['POST'])
+@login.login_required
+@csrf.exempt
+def attendance_regenerate_api():
+    include_current = request.args.get('include_current', '0') == '1'
+    try:
+        return jsonify(regenerate_history(login.current_user, include_current=include_current)), 200
+    except Exception as e:
+        logging.exception('Attendance regenerate failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/attendance-history')
+@login.login_required
+def attendance_history_page():
+    data = get_attendance_history(login.current_user)
+    if data is None:
+        flash('No hay datos de asistencia. Sincroniza con WodBuster.', 'info')
+        return redirect(url_for('booking.index_view'))
+    return render_template(
+        'attendance_history.html',
+        history=data,
+        attendance_history_data=data,
+    )
 
 
 @app.route('/weekly-classes')

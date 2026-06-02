@@ -18,7 +18,8 @@ from flask_wtf import FlaskForm
 from flask_wtf import Recaptcha
 from flask_wtf.recaptcha import RecaptchaField
 from .models import User, db, Booking, WodBusterBooking, ClassTrainingDescription
-from .booker import start_booking_loop, stop_booking_loop, is_booking_running, sync_wodbuster_bookings, sync_training_descriptions_for_date
+from .booker import start_booking_loop, stop_booking_loop, is_booking_running, sync_training_descriptions_for_date
+from .attendance_stats import sync_wodbuster_all, get_attendance_dashboard
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
 from .constants import EventMessage, DAYS_OF_WEEK, DEFAULT_OFFSETS_BY_DAY
@@ -228,21 +229,42 @@ class BookingAdmin(sqla.ModelView):
     def sync_wodbuster_bookings_endpoint(self):
         """Manual sync endpoint for WodBuster bookings"""
         if not login.current_user.is_authenticated:
-            flash("Debes iniciar sesión para sincronizar reservas", "error")
-            return redirect(url_for('admin.login_view'))
+            return redirect(
+                url_for(
+                    'admin.login_view',
+                    sync_status='error',
+                    sync_message='Debes iniciar sesión para sincronizar reservas',
+                )
+            )
         
         try:
-            result = sync_wodbuster_bookings(login.current_user)
+            result = sync_wodbuster_all(login.current_user)
             if result['success']:
-                flash(f"Sincronización completada: {result['new']} nuevas, {result['updated']} actualizadas, {result['cancelled']} canceladas", "success")
+                return redirect(
+                    url_for(
+                        'booking.index_view',
+                        sync_status='success',
+                        sync_message="Sincronización completada",
+                    )
+                )
             else:
                 error_msg = "; ".join(result['errors'])
-                flash(f"Error en la sincronización: {error_msg}", "error")
+                return redirect(
+                    url_for(
+                        'booking.index_view',
+                        sync_status='error',
+                        sync_message=f"Error en la sincronización: {error_msg}",
+                    )
+                )
         except Exception as e:
             logging.exception("Error in sync endpoint")
-            flash(f"Error al sincronizar: {str(e)}", "error")
-        
-        return redirect(url_for('booking.index_view'))
+            return redirect(
+                url_for(
+                    'booking.index_view',
+                    sync_status='error',
+                    sync_message=f"Error al sincronizar: {str(e)}",
+                )
+            )
 
     @expose("/active", methods=("POST",))
     def switch_active(self):
@@ -305,7 +327,7 @@ class BookingAdmin(sqla.ModelView):
                 db.session.commit()
                 flash("Reserva cancelada con éxito.", "success")
                 # Trigger a sync to refresh the state from WodBuster
-                sync_wodbuster_bookings(login.current_user)
+                sync_wodbuster_all(login.current_user)
             else:
                 flash("Error al cancelar la reserva en WodBuster.", "error")
 
@@ -645,6 +667,18 @@ class BookingAdmin(sqla.ModelView):
         kwargs['training_descriptions_by_date'] = training_descriptions_by_date
         training_desc_logger.info("Passing training_descriptions_by_date to template: %s", 
                     "present" if training_descriptions_by_date else "empty")
+
+        kwargs['attendance_dashboard'] = None
+        if login.current_user.is_authenticated and login.current_user.athlete_id:
+            try:
+                kwargs['attendance_dashboard'] = get_attendance_dashboard(login.current_user)
+            except Exception:
+                logging.exception('Failed to load attendance dashboard')
+                from .attendance_stats import _empty_dashboard
+                kwargs['attendance_dashboard'] = _empty_dashboard(
+                    'No se pudieron cargar las estadísticas. ¿Migración v1.13.0 aplicada?',
+                )
+
         return super().render(template, **kwargs)
 
     @staticmethod
