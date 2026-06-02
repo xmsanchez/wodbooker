@@ -52,7 +52,8 @@ class User(db.Model):
     push_reminder_15m = db.Column(db.Boolean, default=False)
     wodbuster_autosync_enabled = db.Column(db.Boolean, default=False)
     auto_sync_training_descriptions = db.Column(db.Boolean, default=False)
-    
+    attendance_history_from = db.Column(db.Date, nullable=True)
+
     # Push notification subscriptions
     push_subscriptions = db.relationship('PushSubscription', backref='user', lazy=True, cascade="all, delete-orphan")
 
@@ -142,3 +143,27 @@ class ClassTrainingDescription(db.Model):
     
     def __str__(self):
         return f"{self.class_date.strftime('%d/%m/%Y')} - {self.training_name}"
+
+
+class AthleteMonthlyStats(db.Model):
+    __tablename__ = 'athlete_monthly_stats'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    booked = db.Column(db.Integer, default=0)
+    attended = db.Column(db.Integer, default=0)
+    no_show = db.Column(db.Integer, default=0)
+    cancelled = db.Column(db.Integer, default=0)
+    billing_period_cancelled = db.Column(db.Integer, nullable=True)
+    tariff_name = db.Column(db.String(128), nullable=True)
+    quota_used = db.Column(db.Integer, nullable=True)
+    quota_total = db.Column(db.Integer, nullable=True)
+    period_from = db.Column(db.Date, nullable=True)
+    period_to = db.Column(db.Date, nullable=True)
+    fetched_at = db.Column(db.DateTime, default=datetime.now)
+    source = db.Column(db.String(32), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'year', 'month', name='_user_year_month_uc'),
+    )

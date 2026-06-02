@@ -32,7 +32,12 @@ sequenceDiagram
 | `/api/push/subscribe` | POST | Login, CSRF exempt | Register push subscription |
 | `/api/push/unsubscribe` | POST | Login, CSRF exempt | Remove subscription |
 | `/api/push/test` | POST | Login, CSRF exempt | Test push (5s delayed thread) |
-| `/api/wodbuster/sync` | POST | Login, CSRF exempt | AJAX WodBuster booking sync |
+| `/api/wodbuster/sync` | POST | Login, CSRF exempt | Booking + attendance sync |
+| `/api/attendance/dashboard` | GET | Login | Home mood JSON |
+| `/api/attendance/history` | GET | Login | History chart JSON |
+| `/api/attendance/backfill` | POST | Login, CSRF exempt | Bulk historical month fetch |
+| `/api/attendance/regenerate-history` | POST | Login, CSRF exempt | Purge cached history |
+| `/attendance-history` | GET | Login | Attendance chart page |
 | `/weekly-classes` | GET | Login | Weekly schedule page |
 
 ### Flask-Admin (`views.py`, mounted at `/`)
@@ -85,6 +90,9 @@ erDiagram
 | `PushSubscription` | `push_subscription` | Web Push endpoints |
 | `NotificationSent` | `notification_sent` | Dedup for class reminders |
 | `ClassTrainingDescription` | `class_training_description` | Cached WOD board text |
+| `AthleteMonthlyStats` | `athlete_monthly_stats` | Calendar-month attendance cache |
+
+`User.attendance_history_from` (v1.13.1): earliest month to backfill. Past months with `source=reservas` are immutable. Rollback: `migrations/v1.13.0/rollback_athlete_monthly_stats.sql`.
 
 ## Authentication
 

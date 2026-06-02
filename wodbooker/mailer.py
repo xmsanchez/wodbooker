@@ -5,7 +5,6 @@ from enum import Enum
 from abc import abstractmethod, ABC
 from queue import Queue
 import smtplib
-from email.mime.text import MIMEText
 from email.message import EmailMessage
 from .models import User
 from .constants import DAYS_OF_WEEK
@@ -49,12 +48,6 @@ class Email(ABC):
         Returns the mail HTML
         """
 
-    @abstractmethod
-    def get_plain_body(self) -> str:
-        """
-        Returns the mail plain body
-        """
-
     def get_subject(self) -> str:
         """
         Returns the mail subject
@@ -88,9 +81,6 @@ class ErrorEmail(Email):
         return _HTML_TEMPLATE.format(_HOST, title, self.error, self.booking.url,
                                      self.booking.id)
 
-    def get_plain_body(self):
-        return self.error
-
 
 class SuccessEmail(Email):
     """
@@ -110,9 +100,6 @@ class SuccessEmail(Email):
                 f"{self.booking.time.strftime('%H:%M')}"
         return _HTML_TEMPLATE.format(_HOST, title, self.message, self.booking.url,
                                      self.booking.id)
-
-    def get_plain_body(self):
-        return self.message
 
 
 class SuccessAfterErrorEmail(SuccessEmail):

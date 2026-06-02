@@ -60,6 +60,7 @@
             // Show result message
             if (data.success) {
                 showSyncMessage(data.message, 'success');
+                refreshAttendanceDashboard();
             } else {
                 showSyncMessage('Error: ' + (data.error || 'Error desconocido'), 'error');
             }
@@ -79,33 +80,45 @@
     
     // Show sync message
     function showSyncMessage(message, type) {
-        // Remove existing message if any
-        const existingMessage = document.getElementById('autosync-message');
-        if (existingMessage) {
-            existingMessage.remove();
+        if (typeof window.showSyncPopup === 'function') {
+            window.showSyncPopup(message, type);
+            return;
         }
-        
-        // Create message element
-        const messageDiv = document.createElement('div');
-        messageDiv.id = 'autosync-message';
-        messageDiv.className = 'alert alert-' + (type === 'success' ? 'success' : 'danger');
-        messageDiv.style.cssText = 'margin: 10px 0; padding: 10px; border-radius: 4px;';
-        messageDiv.textContent = message;
-        
-        // Insert at the top of the content area
-        const contentArea = document.querySelector('.content') || document.querySelector('body');
-        if (contentArea) {
-            contentArea.insertBefore(messageDiv, contentArea.firstChild);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.remove();
-                }
-            }, 5000);
-        }
+        // Non-blocking fallback for pages without popup helper.
+        console.warn('Sync message:', message);
     }
     
+    async function refreshAttendanceDashboard() {
+        const card = document.getElementById('attendanceSummaryCard');
+        if (!card) return;
+        try {
+            const res = await fetch('/api/attendance/dashboard');
+            const data = await res.json();
+            if (!data.available) return;
+            const label = document.getElementById('attendanceQuotaLabel');
+            if (label && data.quota_mood) label.textContent = data.quota_mood.label;
+            const cal = document.getElementById('attendanceCalendarSummary');
+            if (cal && data.calendar_month) cal.textContent = data.calendar_month.summary_line;
+            const credits = document.getElementById('attendanceCreditsLine');
+            if (credits && data.billing_period) credits.textContent = data.billing_period.credits_line;
+            const borrada = document.getElementById('attendanceBorradaLine');
+            if (borrada) {
+                if (data.billing_period && data.billing_period.cancelled_line) {
+                    borrada.textContent = data.billing_period.cancelled_line;
+                    borrada.style.display = '';
+                } else {
+                    borrada.style.display = 'none';
+                }
+            }
+            const yoyMsg = document.getElementById('attendanceYoyMessage');
+            if (yoyMsg && data.yoy_mood) yoyMsg.textContent = data.yoy_mood.message || '';
+            const yoyDet = document.getElementById('attendanceYoyDetail');
+            if (yoyDet && data.yoy_mood) yoyDet.textContent = data.yoy_mood.detail || '';
+        } catch (e) {
+            console.warn('Attendance dashboard refresh failed', e);
+        }
+    }
+
     // Get CSRF token from meta tag or hidden input
     function getCSRFToken() {
         // Try to get from meta tag

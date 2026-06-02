@@ -26,11 +26,11 @@
     </div>
     <div class="d-flex gap-2">
       {% if current_user.athlete_id %}
-        <form method="POST" action="{{ url_for('booking.sync_wodbuster_bookings_endpoint') }}" style="display: inline;">
+        <form id="syncWodBusterForm" method="POST" action="{{ url_for('booking.sync_wodbuster_bookings_endpoint') }}" style="display: inline;">
           {% if csrf_token %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           {% endif %}
-          <button type="submit" class="btn btn-outline-secondary btn-sm" title="Sincronizar reservas de WodBuster">
+          <button type="submit" id="syncWodBusterBtn" class="btn btn-outline-secondary btn-sm" title="Sincronizar reservas de WodBuster">
             <i class="bi bi-arrow-clockwise"></i> Sync WodBuster
           </button>
         </form>
@@ -38,9 +38,74 @@
       <a class="btn btn-outline-primary btn-sm" href="{{ url_for('weekly_classes') }}" role="button" title="Ver clases de la próxima semana">
         <i class="bi bi-calendar-week"></i> Clases próxima semana
       </a>
-      <a class="btn btn-primary" href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button"><i class="bi bi-plus-square-fill"></i> Nueva Reserva</a>
+      <a
+        class="btn btn-primary d-none d-md-inline-block"
+        href="{{ get_url('.create_view', url=return_url, modal=True) }}"
+        role="button"
+      >
+        <i class="bi bi-plus-square-fill"></i> Nueva Reserva
+      </a>
+      <a
+        class="btn btn-primary d-inline-flex d-md-none align-items-center justify-content-center new-booking-mobile-btn"
+        href="{{ get_url('.create_view', url=return_url, modal=True) }}"
+        role="button"
+        title="Nueva reserva"
+        aria-label="Nueva reserva"
+      >
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+      </a>
     </div>
   </div>
+  {% if current_user.athlete_id and attendance_dashboard %}
+  <div class="card mb-3" id="attendanceSummaryCard">
+    <div class="card-header d-flex justify-content-between align-items-center"
+         style="cursor: pointer;"
+         data-toggle="collapse" data-target="#attendanceSummaryBody"
+         aria-expanded="false" aria-controls="attendanceSummaryBody"
+         title="{{ attendance_dashboard.quota_mood.subtitle or '' }}">
+      <span id="attendanceQuotaLabel">{{ attendance_dashboard.quota_mood.label }}</span>
+      <i class="bi bi-chevron-down"></i>
+    </div>
+    <div id="attendanceSummaryBody" class="collapse">
+      <div class="card-body">
+        {% if attendance_dashboard.stale_message %}
+        <p class="text-warning small mb-2" id="attendanceStaleMsg">{{ attendance_dashboard.stale_message }}</p>
+        {% endif %}
+        {% if attendance_dashboard.needs_sync %}
+        <p class="mb-2" id="attendanceSummaryLine">{{ attendance_dashboard.calendar_month.summary_line }}</p>
+        {% else %}
+        <p class="mb-2 font-weight-bold" id="attendanceCalendarSummary">{{ attendance_dashboard.calendar_month.summary_line }}</p>
+        {% if attendance_dashboard.calendar_month.no_show_line %}
+        <p class="mb-1" id="attendancePerdidaLine">{{ attendance_dashboard.calendar_month.no_show_line }}</p>
+        {% endif %}
+        {% if attendance_dashboard.calendar_month.cancelled_line %}
+        <p class="mb-1" id="attendanceCalendarCancelled">{{ attendance_dashboard.calendar_month.cancelled_line }}</p>
+        {% endif %}
+        {% if attendance_dashboard.billing_period %}
+        <hr class="my-2">
+        <p class="mb-1 text-muted small" id="attendanceCreditsLine">{{ attendance_dashboard.billing_period.credits_line }}</p>
+        {% if attendance_dashboard.billing_period.cancelled_line %}
+        <p class="mb-1 text-muted small" id="attendanceBorradaLine">{{ attendance_dashboard.billing_period.cancelled_line }}</p>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+        {% if attendance_dashboard.yoy_mood.message %}
+        <p class="mb-1 mt-2" id="attendanceYoyMessage">{{ attendance_dashboard.yoy_mood.message }}</p>
+        <p class="text-muted small mb-2" id="attendanceYoyDetail">{{ attendance_dashboard.yoy_mood.detail }}</p>
+        {% endif %}
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ url_for('attendance_history_page') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-graph-up"></i> Ver historial
+          </a>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="attendanceBackfillBtn">
+            <i class="bi bi-cloud-download"></i> Completar historial
+          </button>
+        </div>
+        <p class="text-muted small mt-2 mb-0" id="attendanceBackfillStatus"></p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 {% endblock %}
 {% block model_list_table %}
   {% if not data %}
@@ -277,11 +342,64 @@
   <div id="autosync-loading" style="display: none; text-align: center; padding: 10px;">
     <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Sincronizando reservas de WodBuster...
   </div>
+
+  <div id="syncToastHost" aria-live="polite" aria-atomic="true">
+    <div id="syncToast" class="sync-toast" role="status" aria-hidden="true"></div>
+  </div>
   
   <style>
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
+    }
+    #syncToastHost {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1080;
+      pointer-events: none;
+    }
+    .sync-toast {
+      min-width: 160px;
+      max-width: 320px;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      font-size: 0.82rem;
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      color: #fff;
+      pointer-events: none;
+      display: none;
+      text-align: center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+    .sync-toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      display: block;
+    }
+    .sync-toast.success {
+      background: rgba(37, 99, 235, 0.5);
+    }
+    .sync-toast.error {
+      background: rgba(220, 53, 69, 0.88);
+    }
+    .new-booking-mobile-btn {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(13, 110, 253, 0.25);
+      flex: 0 0 42px;
+      align-self: center;
+    }
+    .new-booking-mobile-btn i {
+      font-size: 1.1rem;
+      line-height: 1;
     }
   </style>
   
@@ -297,5 +415,59 @@
     {% if csrf_token %}
       window.CSRF_TOKEN = '{{ csrf_token() }}';
     {% endif %}
+
+    window.MANUAL_SYNC_STATUS = {{ request.args.get('sync_status')|tojson }};
+    window.MANUAL_SYNC_MESSAGE = {{ request.args.get('sync_message')|tojson }};
+
+    var syncToastTimer = null;
+    window.showSyncPopup = function (message, type) {
+      var toast = document.getElementById('syncToast');
+      if (!toast || !message) {
+        return;
+      }
+      var safeType = type === 'success' ? 'success' : 'error';
+      var icon = safeType === 'success' ? '<i class="bi bi-check-circle"></i>' : '<i class="bi bi-exclamation-triangle"></i>';
+      toast.className = 'sync-toast ' + safeType;
+      toast.innerHTML = icon + ' ' + message;
+      toast.setAttribute('aria-hidden', 'false');
+      toast.classList.add('show');
+
+      if (syncToastTimer) {
+        clearTimeout(syncToastTimer);
+      }
+      syncToastTimer = setTimeout(function () {
+        toast.classList.remove('show');
+        toast.setAttribute('aria-hidden', 'true');
+      }, 4000);
+    };
+
+    (function showRedirectSyncPopup() {
+      if (window.MANUAL_SYNC_STATUS && window.MANUAL_SYNC_MESSAGE) {
+        window.showSyncPopup(window.MANUAL_SYNC_MESSAGE, window.MANUAL_SYNC_STATUS);
+      }
+    })();
+
+    // Show spinner when manual Sync WodBuster is submitted
+    (function () {
+      var form = document.getElementById('syncWodBusterForm');
+      if (form) {
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var btn = document.getElementById('syncWodBusterBtn');
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite; display: inline-block;"></i> Sincronizando...';
+          }
+          var loading = document.getElementById('autosync-loading');
+          if (loading) loading.style.display = 'block';
+          window.requestAnimationFrame(function () {
+            setTimeout(function () {
+              form.submit();
+            }, 30);
+          });
+        });
+      }
+    })();
   </script>
+  <script src="{{ url_for('static', filename='attendance-backfill.js') }}"></script>
 {% endblock %}

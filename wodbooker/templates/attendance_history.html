@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tu historial de asistencia - WodBooker</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; padding-top: 60px; }
+        .navbar { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
+        .navbar-brand { color: white !important; font-weight: 600; }
+        .content { background: #fff; margin: 20px; border-radius: 12px; border: 1px solid #e2e8f0; padding: 20px; }
+        .chart-wrap { position: relative; height: 320px; margin-bottom: 1.5rem; }
+        .history-controls { gap: 0.5rem; }
+        @media (max-width: 767.98px) {
+            .history-table th,
+            .history-table td {
+                font-size: 0.78rem;
+                padding: 0.3rem;
+            }
+            .history-table th {
+                white-space: nowrap;
+            }
+            .history-table td:first-child {
+                white-space: nowrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark fixed-top">
+        <a class="navbar-brand" href="{{ url_for('booking.index_view') }}">WodBooker</a>
+    </nav>
+    <div class="content">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+            <h1 class="h4 mb-0">Tu historial de asistencia</h1>
+            <div>
+                <a href="{{ url_for('booking.index_view') }}" class="btn btn-outline-secondary btn-sm">Volver</a>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="attendanceBackfillBtn">
+                    Completar historial
+                </button>
+            </div>
+        </div>
+
+        {% if history.incomplete %}
+        <div class="alert alert-info" id="historyIncompleteBanner">
+            Faltan {{ history.months_remaining }} meses por sincronizar.
+            Pulsa «Completar historial» (también disponible en la lista de reservas).
+        </div>
+        {% endif %}
+
+        {% if history.stale %}
+        <div class="alert alert-warning">Datos desactualizados. Sincroniza con WodBuster.</div>
+        {% endif %}
+
+        <p class="text-muted small" id="attendanceBackfillStatus"></p>
+
+        <div class="d-flex flex-wrap history-controls mb-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="historyRangeToggleBtn">
+                Mostrar todos los años
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="historyGranularityToggleBtn">
+                Mostrar anualmente
+            </button>
+        </div>
+        <div class="chart-wrap"><canvas id="attendanceChart"></canvas></div>
+
+        <div class="table-responsive">
+            <table class="table table-sm history-table">
+                <thead>
+                    <tr>
+                        <th>Mes</th><th>Asistidas</th><th>Reservadas</th>
+                        <th>No presentado</th><th>Canceladas (mes)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in history.months %}
+                    <tr>
+                        <td>{{ row.label }}</td>
+                        <td>{{ row.attended }}</td>
+                        <td>{{ row.booked }}</td>
+                        <td>{{ row.no_show }}</td>
+                        <td>{% if row.cancelled is none %}—{% else %}{{ row.cancelled }}{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-muted small">
+            Las cancelaciones históricas por mes solo están completas cuando WodBuster las expone en ese mes.
+            Las cancelaciones del <strong>periodo de facturación</strong> aparecen en la tarjeta de resumen.
+        </p>
+
+        <button type="button" class="btn btn-link btn-sm text-danger p-0" id="regenerateHistoryBtn">
+            Regenerar historial almacenado
+        </button>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>window.ATTENDANCE_HISTORY_DATA = {{ attendance_history_data | tojson }};</script>
+    <script src="{{ url_for('static', filename='attendance-history.js') }}"></script>
+    <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+    <script src="{{ url_for('static', filename='attendance-backfill.js') }}"></script>
+</body>
+</html>
