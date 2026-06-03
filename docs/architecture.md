@@ -37,7 +37,7 @@ sequenceDiagram
 | `/api/attendance/history` | GET | Login | History chart JSON |
 | `/api/attendance/backfill` | POST | Login, CSRF exempt | Bulk historical month fetch |
 | `/api/attendance/regenerate-history` | POST | Login, CSRF exempt | Purge cached history |
-| `/attendance-history` | GET | Login | Attendance chart page |
+| `/attendance-history` | GET | Login | Attendance chart page — see [attendance-history-chart.md](attendance-history-chart.md) |
 | `/weekly-classes` | GET | Login | Weekly schedule page |
 
 ### Flask-Admin (`views.py`, mounted at `/`)

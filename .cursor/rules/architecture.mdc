@@ -11,10 +11,11 @@ Flask app that auto-books WodBuster classes. Bootstrap: `wodbooker/__init__.py` 
 
 | Task | Start here |
 |------|------------|
-| Booking logic / threads | `wodbooker/booker.py` → [booking-flow.md](../docs/booking-flow.md) |
-| WodBuster API / login | `wodbooker/scraper.py` → [wodbuster-integration.md](../docs/wodbuster-integration.md) |
+| Booking logic / threads | `wodbooker/booker.py` → [booking-flow.md](../../docs/booking-flow.md) |
+| WodBuster API / login | `wodbooker/scraper.py` → [wodbuster-integration.md](....//docs/wodbuster-integration.md) |
 | DB schema | `wodbooker/models.py` + `migrations/` → skill `db-migration` |
 | Admin UI / login | `wodbooker/views.py`, `wodbooker/templates/` |
+| Attendance history chart | `wodbooker/static/attendance-history.js` → [attendance-history-chart.md](../../docs/attendance-history-chart.md), rule `attendance-chart.mdc` |
 | Push / email | `push_notifications.py`, `notification_scheduler.py`, `mailer.py` |
 | Routes / startup | `wodbooker/__init__.py` |
 
@@ -25,7 +26,7 @@ Flask app that auto-books WodBuster classes. Bootstrap: `wodbooker/__init__.py` 
 - **Whitelist**: `BOOKING_WHITELIST_EMAILS` — if non-empty, only listed emails can start booking loops.
 - **Admin URL**: Flask-Admin at `/` (not `/admin`). `/admin/*` redirects to `/`.
 - **DB file**: `wodbooker/db.sqlite` (SQLAlchemy URI in `__init__.py`).
-- **Do not** duplicate Docker/SSL/VAPID setup — see [README.md](../README.md).
+- **Do not** duplicate Docker/SSL/VAPID setup — see [README.md](../../README.md).
 
 ## Background work at startup
 
@@ -36,5 +37,5 @@ Flask app that auto-books WodBuster classes. Bootstrap: `wodbooker/__init__.py` 
 
 ## Docs
 
-- [AGENTS.md](../AGENTS.md) — quick start for agents
-- [docs/architecture.md](../docs/architecture.md) — full detail
+- [AGENTS.md](../../AGENTS.md) — quick start for agents
+- [docs/architecture.md](../../docs/architecture.md) — full detail

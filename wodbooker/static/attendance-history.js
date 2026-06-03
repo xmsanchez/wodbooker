@@ -13,6 +13,48 @@
     let showYearly = false;
     let currentSeries = null;
 
+    const TREND_WINDOW = 6;
+
+    const TOOLTIP_ITEM_ORDER = [
+        'Asistidas',
+        'Reservadas',
+        'Asistidas año anterior',
+        'Tendencia 6 meses',
+    ];
+
+    function formatTooltipLabel(ctx) {
+        const name = ctx.dataset.label || '';
+        const y = ctx.parsed.y;
+        return name + ': ' + (y == null ? '—' : y);
+    }
+
+    function extraAttendanceTooltipLines(dataIndex) {
+        const cancelled = currentSeries.cancelled[dataIndex];
+        return [
+            'No presentado: ' + (currentSeries.noShow[dataIndex] || 0),
+            'Canceladas: ' + (
+                cancelled === null || cancelled === undefined ? '—' : cancelled
+            ),
+        ];
+    }
+
+    function movingAverage(values, windowSize) {
+        const n = values.length;
+        if (n === 0) return [];
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const start = Math.max(0, i - windowSize + 1);
+            let sum = 0;
+            let count = 0;
+            for (let j = start; j <= i; j++) {
+                sum += values[j] || 0;
+                count += 1;
+            }
+            out.push(Math.round(sum / count));
+        }
+        return out;
+    }
+
     function aggregateYearly(monthRows) {
         const byYear = new Map();
         monthRows.forEach((row) => {
@@ -80,7 +122,10 @@
 
     function buildSeries() {
         const base = showYearly ? aggregateYearly(allMonths) : monthlySeries(allMonths);
-        return applyRangeLimit(base);
+        const limited = applyRangeLimit(base);
+        return Object.assign({}, limited, {
+            attendedTrend: movingAverage(limited.attended, TREND_WINDOW),
+        });
     }
 
     function syncButtonLabels() {
@@ -117,7 +162,17 @@
                     data: currentSeries.prevYearAttended,
                     type: 'line',
                     borderColor: 'rgba(234, 179, 8, 1)',
-                    backgroundColor: 'transparent',
+                    backgroundColor: 'rgba(234, 179, 8, 0.35)',
+                    tension: 0.2,
+                },
+                {
+                    label: 'Tendencia 6 meses',
+                    data: currentSeries.attendedTrend,
+                    type: 'line',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.35)',
+                    borderDash: [6, 4],
+                    pointRadius: 0,
                     tension: 0.2,
                 },
             ],
@@ -131,25 +186,18 @@
                 tooltip: {
                     mode: 'index',
                     intersect: false,
-                    filter: function (ctx) {
-                        return ctx.datasetIndex === 0;
+                    itemSort: function (a, b) {
+                        return TOOLTIP_ITEM_ORDER.indexOf(a.dataset.label)
+                            - TOOLTIP_ITEM_ORDER.indexOf(b.dataset.label);
                     },
                     callbacks: {
                         title: function (items) {
                             return items.length ? items[0].label : '';
                         },
-                        label: function (ctx) {
-                            const idx = ctx.dataIndex;
-                            return [
-                                'Asistidas: ' + (currentSeries.attended[idx] || 0),
-                                'Reservadas: ' + (currentSeries.booked[idx] || 0),
-                                'No presentado: ' + (currentSeries.noShow[idx] || 0),
-                                'Canceladas: ' + (
-                                    currentSeries.cancelled[idx] === null
-                                        ? '—'
-                                        : currentSeries.cancelled[idx]
-                                ),
-                            ];
+                        label: formatTooltipLabel,
+                        afterLabel: function (ctx) {
+                            if (ctx.datasetIndex !== 1) return '';
+                            return extraAttendanceTooltipLines(ctx.dataIndex);
                         },
                     },
                 },
@@ -164,6 +212,7 @@
         chart.data.datasets[0].data = currentSeries.attended;
         chart.data.datasets[1].data = currentSeries.booked;
         chart.data.datasets[2].data = currentSeries.prevYearAttended;
+        chart.data.datasets[3].data = currentSeries.attendedTrend;
         chart.update();
         syncButtonLabels();
     }
