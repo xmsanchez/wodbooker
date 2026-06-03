@@ -11,6 +11,7 @@ WodBooker is a Flask application that logs into WodBuster on behalf of users and
 | WodBuster API / login bug | `wodbooker/scraper.py`, `docs/wodbuster-integration.md` | `exceptions.py` |
 | DB column / model | `wodbooker/models.py`, `.cursor/skills/db-migration/` | `migrations.mdc` |
 | Admin / templates | `wodbooker/views.py`, `wodbooker/templates/` | `admin-ui.mdc` |
+| Attendance history chart / tooltip | `wodbooker/static/attendance-history.js`, `docs/attendance-history-chart.md` | skill `attendance-chart`, rule `attendance-chart.mdc` |
 | Push / email | `push_notifications.py`, `notification_scheduler.py`, `mailer.py` | README (VAPID setup) |
 
 ## Critical invariants
@@ -24,6 +25,7 @@ WodBooker is a Flask application that logs into WodBuster on behalf of users and
 ## Run locally
 
 ```bash
+python -m venv .venv
 pip install -r requirements.txt
 python app.py   # http://0.0.0.0:5000
 ```
@@ -43,6 +45,7 @@ See [docs/architecture.md](docs/architecture.md) for DB path and auto-migration 
 - [docs/architecture.md](docs/architecture.md)
 - [docs/booking-flow.md](docs/booking-flow.md)
 - [docs/wodbuster-integration.md](docs/wodbuster-integration.md)
+- [docs/attendance-history-chart.md](docs/attendance-history-chart.md)
 
 ## Cursor rules
 
@@ -50,4 +53,4 @@ Always-on: `.cursor/rules/architecture.mdc`. File-scoped rules load when matchin
 
 ## Context hygiene
 
-After a PR, update docs/rules when you change: models (architecture doc), booking logic (`booking-flow.md`), WodBuster errors (`wodbuster-integration.md`), admin routes (`admin-ui.mdc`), or env vars (`architecture.mdc`).
+After a PR, update docs/rules when you change: models (architecture doc), booking logic (`booking-flow.md`), WodBuster errors (`wodbuster-integration.md`), admin routes (`admin-ui.mdc`), attendance chart/tooltip (`attendance-history-chart.md`, `attendance-chart.mdc`), or env vars (`architecture.mdc`).

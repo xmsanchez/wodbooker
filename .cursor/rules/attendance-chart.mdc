@@ -1,0 +1,38 @@
+---
+description: Attendance history Chart.js chart and tooltip
+globs: wodbooker/static/attendance-history.js,wodbooker/templates/attendance_history.html
+alwaysApply: false
+---
+
+# Attendance history chart
+
+Full reference: [docs/attendance-history-chart.md](../docs/attendance-history-chart.md). Skill: `attendance-chart`.
+
+## Files
+
+| File | Role |
+|------|------|
+| `wodbooker/static/attendance-history.js` | Chart.js 4 — datasets, toggles, tooltip, `TREND_WINDOW` |
+| `wodbooker/templates/attendance_history.html` | `window.ATTENDANCE_HISTORY_DATA`, canvas `#attendanceChart` |
+| `wodbooker/attendance_stats.py` | `get_attendance_history()` — if `months[]` shape changes, update JS + doc |
+| `wodbooker/static/attendance-backfill.js` | Backfill/regenerate only — not chart logic |
+
+Page: `GET /attendance-history` (`wodbooker/__init__.py`).
+
+## Chart invariants
+
+- **4 datasets** (indices 0–3): Asistidas bar, Reservadas bar, año anterior line, Tendencia 6 meses line.
+- **`TREND_WINDOW = 6`:** trailing moving average of `attended` over the **visible** series after `applyRangeLimit()`.
+- **`rerenderChart()`** must update `datasets[0..3]` when toggles change.
+- **`no_show` / `cancelled`:** not chart datasets; table + tooltip via `extraAttendanceTooltipLines()` in `afterLabel` on dataset **1** (Reservadas).
+
+## Tooltip invariants
+
+- One colored box **per dataset** in the tooltip — not per string in a `label` array.
+- Do **not** return `label: [line1, line2, …]` from dataset 0 for multiple swatches.
+- Colored lines: use real datasets + `TOOLTIP_ITEM_ORDER` + `formatTooltipLabel`.
+- Plain text without boxes: extend `afterLabel` on Reservadas (or `afterBody` if end-of-tooltip order is OK).
+
+## When changing
+
+Sync legend label, `TOOLTIP_ITEM_ORDER`, `TREND_WINDOW` constant name in UI, and `docs/attendance-history-chart.md`.

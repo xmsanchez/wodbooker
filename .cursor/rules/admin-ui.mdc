@@ -29,6 +29,7 @@ alwaysApply: false
 
 - Custom list/edit under `wodbooker/templates/admin/booking/`
 - Base: `wodbooker/templates/base.html` (Bootstrap 4)
+- Standalone pages (not Flask-Admin CRUD): `/attendance-history` → `attendance_history.html` (link from booking list); chart in `attendance-history.js` — see [attendance-history-chart.md](../docs/attendance-history-chart.md)
 
 ## i18n
 

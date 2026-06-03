@@ -13,6 +13,7 @@ description: End-to-end checklist for implementing a new WodBooker feature. Use 
    - **Booking scheduling** → `booker.py`, [booking-flow.md](../../../docs/booking-flow.md)
    - **WodBuster API** → `scraper.py`, [wodbuster-integration.md](../../../docs/wodbuster-integration.md)
    - **Admin UI** → `views.py`, `wodbooker/templates/`, `admin-ui.mdc`
+   - **Attendance history chart** → [attendance-chart](../attendance-chart/SKILL.md), `attendance-history.js`
    - **Notifications** → `mailer.py`, `push_notifications.py`, `notification_scheduler.py`
    - **Routes** → `__init__.py`
 
