@@ -1,11 +1,26 @@
 import os
+import os.path as op
 import argparse
+import importlib.util
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 logging.basicConfig(format='%(asctime)s - %(threadName)s - %(message)s', level=logging.INFO)
+
+_PROJECT_ROOT = op.dirname(op.realpath(__file__))
+
+
+def _resolve_db_path():
+    """Same path as the running app (wodbooker.db_path, without loading Flask)."""
+    spec = importlib.util.spec_from_file_location(
+        'wodbooker_db_path',
+        op.join(_PROJECT_ROOT, 'wodbooker', 'db_path.py'),
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.resolve_database_path()
 
 def get_migrate_scripts(version):
     """
@@ -14,12 +29,13 @@ def get_migrate_scripts(version):
     """
     _migrations = {}
 
-    if not os.path.exists(f'migrations/{version}'):
+    migrations_dir = op.join(_PROJECT_ROOT, 'migrations', version)
+    if not os.path.exists(migrations_dir):
         return _migrations
 
-    for file in os.listdir(f'migrations/{version}'):
+    for file in os.listdir(migrations_dir):
         if file.endswith('.sql'):
-            with open(f'migrations/{version}/{file}', 'r', encoding='utf-8') as f:
+            with open(op.join(migrations_dir, file), 'r', encoding='utf-8') as f:
                 _migrations[file] = f.read()
 
     return _migrations
@@ -30,18 +46,8 @@ def execute_migration(_migrations):
     Execute the given migration scripts
     :param migrations: Dictionary with the migration scripts
     """
-    import os
-    # Check if database is in instance/ or in the current directory
-    db_path = 'instance/db.sqlite'
-    if not os.path.exists(db_path):
-        db_path = 'db.sqlite'
-    if not os.path.exists(db_path):
-        # Try in wodbooker directory
-        db_path = 'wodbooker/db.sqlite'
-    
-    if not os.path.exists(db_path):
-        logging.error("Database file not found. Tried: instance/db.sqlite, db.sqlite, wodbooker/db.sqlite")
-        return
+    db_path = _resolve_db_path()
+    logging.info("Using database: %s", db_path)
     
     engine = create_engine(f'sqlite:///{db_path}')
     conn = engine.connect()

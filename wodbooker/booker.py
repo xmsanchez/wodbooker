@@ -70,6 +70,20 @@ def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
     return base_date + timedelta(days_ahead)
 
 
+def _should_attempt_book_now(booking: Booking, class_datetime: datetime) -> bool:
+    user = booking.user
+    now = datetime.now(_MADRID_TZ)
+    hours_left = (class_datetime - now).total_seconds() / 3600
+    cancel_window_hours = user.cancel_window_hours if user.cancel_window_hours is not None else 3
+    if hours_left >= cancel_window_hours:
+        return True
+    if booking.book_despite_cancel_window is True:
+        return True
+    if booking.book_despite_cancel_window is False:
+        return False
+    return not user.stop_autobook_in_cancel_window
+
+
 def _get_datetime_to_book(last_booking_date: date, dow: int, booking_time: time) -> datetime:
     """
     Get the day to book for a given date and day of week
@@ -208,6 +222,45 @@ class Booker(StoppableThread):
                     day_to_book = datetime_to_book.date()
 
                     waiter = self._wait_for_booking_window(waiter, day_to_book)
+
+                    if not _should_attempt_book_now(self._booking, datetime_to_book):
+                        cancel_window_hours = (
+                            self._booking.user.cancel_window_hours
+                            if self._booking.user.cancel_window_hours is not None
+                            else 3
+                        )
+                        cancel_deadline = datetime_to_book - timedelta(hours=cancel_window_hours)
+                        now = datetime.now(_MADRID_TZ)
+                        if now < cancel_deadline:
+                            logging.info(
+                                "Inside cancel window (%s h); waiting until %s before booking %s",
+                                cancel_window_hours,
+                                cancel_deadline.strftime('%d/%m/%Y %H:%M:%S'),
+                                datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'),
+                            )
+                            waiter = _TimeWaiter(
+                                self._booking,
+                                EventMessage.WAIT_UNTIL_CANCEL_WINDOW % (
+                                    cancel_deadline.strftime('%d/%m/%Y a las %H:%M:%S'),
+                                    cancel_window_hours,
+                                    day_to_book.strftime('%d/%m/%Y'),
+                                ),
+                                cancel_deadline,
+                            )
+                            waiter.wait()
+                            continue
+                        logging.info(
+                            "Inside cancel window (%s h) and past deadline; skipping week for %s",
+                            cancel_window_hours,
+                            datetime_to_book.strftime('%d/%m/%Y %H:%M:%S'),
+                        )
+                        skip_current_week = True
+                        event = Event(
+                            booking_id=self._booking.id,
+                            event=EventMessage.SKIP_CANCEL_WINDOW % cancel_window_hours,
+                        )
+                        _add_event(event)
+                        continue
 
                     # Check if user has priority - non-priority users wait 1 second
                     if self._booking.user.email not in PRIORITY_USERS:

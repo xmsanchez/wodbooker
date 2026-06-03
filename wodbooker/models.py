@@ -19,6 +19,7 @@ class Booking(db.Model):
     offset = db.Column(db.Integer, default=0)  # Made optional with default 0
     events = db.relationship('Event', backref='booking', lazy=True, cascade="all, delete-orphan")
     is_active = db.Column(db.Boolean, default=True)
+    book_despite_cancel_window = db.Column(db.Boolean, nullable=True)
 
 
 class Event(db.Model):
@@ -53,6 +54,8 @@ class User(db.Model):
     wodbuster_autosync_enabled = db.Column(db.Boolean, default=False)
     auto_sync_training_descriptions = db.Column(db.Boolean, default=False)
     attendance_history_from = db.Column(db.Date, nullable=True)
+    cancel_window_hours = db.Column(db.Integer, default=3, nullable=False)
+    stop_autobook_in_cancel_window = db.Column(db.Boolean, default=False, nullable=False)
 
     # Push notification subscriptions
     push_subscriptions = db.relationship('PushSubscription', backref='user', lazy=True, cascade="all, delete-orphan")

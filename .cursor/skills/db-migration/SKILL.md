@@ -27,13 +27,7 @@ description: Add or change SQLite schema for WodBooker. Use when adding columns,
 
 ## DB file location
 
-`migrate.py` resolves in order:
-
-1. `instance/db.sqlite`
-2. `db.sqlite`
-3. `wodbooker/db.sqlite`
-
-Runtime app uses `wodbooker/db.sqlite` per `__init__.py` config.
+`migrate.py` and the app both use **`instance/db.sqlite`** at the project root (`wodbooker/db_path.py`).
 
 ## Startup auto-migration
 

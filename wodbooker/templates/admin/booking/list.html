@@ -192,7 +192,7 @@
                     <i>Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí cuando la reserva esté activa según vayan ocurriendo.</i>
                   {% endif %}
                 </p>
-                <p style="margin-bottom: 0;">
+                <p style="margin-bottom: 0.5rem;">
                   <b>Tipo de clase</b><br/>
                   {% if row['type_class'] %}
                     {% if row['type_class'] == 1 %}
@@ -201,7 +201,11 @@
                       Wod
                     {% endif %}
                   {% endif %}
-                </p>  
+                </p>
+                <p style="margin-bottom: 0;">
+                  <b>Forzar reserva aunque esté fuera de ventana de autoreserva</b><br/>
+                  {{ "Sí" if row['book_despite_cancel_window'] else "No" }}
+                </p>
               </div>
             </div>
           </div>

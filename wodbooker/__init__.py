@@ -131,10 +131,8 @@ csrf.init_app(app)
 # Create dummy secrey key so we can use sessions
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '123456790')
 
-# Create in-memory database
-app.config['DATABASE_FILE'] = 'db.sqlite'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
-    app.config['DATABASE_FILE'] + '?check_same_thread=False'
+# SQLite database (Flask instance folder at project root)
+from .db_path import resolve_database_path, sqlalchemy_sqlite_uri
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['CSRF_ENABLED'] = True
@@ -146,12 +144,15 @@ app.config['VAPID_PUBLIC_KEY'] = os.environ.get('VAPID_PUBLIC_KEY')
 app.config['VAPID_PRIVATE_KEY'] = os.environ.get('VAPID_PRIVATE_KEY')
 app.config['VAPID_CLAIM_EMAIL'] = os.environ.get('VAPID_CLAIM_EMAIL', 'mailto:admin@example.com')
 
-# Build a sample db on the fly, if one does not exist yet.
 app_dir = op.realpath(os.path.dirname(__file__))
-database_path = op.join(app_dir, app.config['DATABASE_FILE'])
+database_path = resolve_database_path()
+app.config['DATABASE_FILE'] = database_path
+app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_sqlite_uri(database_path)
+logging.info('Using database: %s', database_path)
 
 def _migrations_root():
-    return op.join(op.dirname(op.dirname(app_dir)), 'migrations')
+    # app_dir is .../wodbooker (package); project root is one level up (migrations/ lives there)
+    return op.join(op.dirname(app_dir), 'migrations')
 
 
 def _execute_sqlite_script(conn, script: str) -> None:
@@ -191,9 +192,30 @@ def _run_migration_sql_files(database_path: str, version: str, filenames: list) 
         conn.close()
 
 
+def _sqlite_has_table(database_path: str, table_name: str) -> bool:
+    import sqlite3
+    conn = sqlite3.connect(database_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        )
+        return cursor.fetchone() is not None
+    finally:
+        conn.close()
+
+
 def _apply_pending_sqlite_migrations(database_path: str) -> None:
     """Apply additive migrations before SQLAlchemy loads models (same pattern as v1.9.0)."""
     import sqlite3
+
+    if not _sqlite_has_table(database_path, 'user'):
+        logging.info(
+            'Skipping SQL migrations: database exists but has no user table '
+            '(fresh or empty file; schema will come from db.create_all)',
+        )
+        return
 
     def _user_columns():
         conn = sqlite3.connect(database_path)
@@ -204,22 +226,10 @@ def _apply_pending_sqlite_migrations(database_path: str) -> None:
         finally:
             conn.close()
 
-    def _has_table(table_name: str) -> bool:
-        conn = sqlite3.connect(database_path)
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (table_name,),
-            )
-            return cursor.fetchone() is not None
-        finally:
-            conn.close()
-
     if 'push_notifications_enabled' not in _user_columns():
         _run_migration_sql_files(database_path, 'v1.9.0', ['push_notifications.sql'])
 
-    if not _has_table('athlete_monthly_stats'):
+    if not _sqlite_has_table(database_path, 'athlete_monthly_stats'):
         _run_migration_sql_files(
             database_path, 'v1.13.0', ['athlete_monthly_stats.sql'],
         )
@@ -227,6 +237,11 @@ def _apply_pending_sqlite_migrations(database_path: str) -> None:
     if 'attendance_history_from' not in _user_columns():
         _run_migration_sql_files(
             database_path, 'v1.13.1', ['attendance_history_from.sql'],
+        )
+
+    if 'cancel_window_hours' not in _user_columns():
+        _run_migration_sql_files(
+            database_path, 'v1.14.0', ['cancel_window_settings.sql'],
         )
 
 
@@ -238,18 +253,19 @@ if os.path.exists(database_path):
     except Exception as e:
         logging.error('Error running pending migrations: %s', e)
         logging.error(
-            'Run manually: python migrate.py v1.13.0 && python migrate.py v1.13.1',
+            'Run manually from repo root: python migrate.py v1.14.0',
         )
         raise
 
 # Now initialize SQLAlchemy (after migration is complete)
-if not os.path.exists(database_path):
-    db.app = app
+db.init_app(app)
+if not os.path.exists(database_path) or not _sqlite_has_table(database_path, 'user'):
     with app.app_context():
-        db.init_app(app)
+        if os.path.exists(database_path):
+            logging.info('Initializing schema in existing database file via create_all')
+        else:
+            logging.info('Creating new database via create_all')
         db.create_all()
-else:
-    db.init_app(app)
 
 
 def _init_login():

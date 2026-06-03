@@ -69,7 +69,7 @@ No APScheduler — all timing uses `time.sleep()` in daemon threads.
 
 ## Data model
 
-SQLite file: `wodbooker/db.sqlite` (URI set in `__init__.py`).
+SQLite file: `instance/db.sqlite` at project root (resolved in `wodbooker/db_path.py`, URI set in `__init__.py`).
 
 ```mermaid
 erDiagram
@@ -83,14 +83,16 @@ erDiagram
 
 | Model | Table | Purpose |
 |-------|-------|---------|
-| `User` | `user` | Auth, cookies, notification/sync preferences |
-| `Booking` | `booking` | Recurring auto-book rule (dow, time, url, offset, available_at) |
+| `User` | `user` | Auth, cookies, notification/sync preferences, cancel-window autobook settings (`cancel_window_hours`, `stop_autobook_in_cancel_window`) |
+| `Booking` | `booking` | Recurring auto-book rule (dow, time, url, offset, available_at); optional `book_despite_cancel_window` override |
 | `Event` | `event` | Per-booking audit log |
 | `WodBusterBooking` | `wodbuster_booking` | Synced real bookings from WodBuster API |
 | `PushSubscription` | `push_subscription` | Web Push endpoints |
 | `NotificationSent` | `notification_sent` | Dedup for class reminders |
 | `ClassTrainingDescription` | `class_training_description` | Cached WOD board text |
 | `AthleteMonthlyStats` | `athlete_monthly_stats` | Calendar-month attendance cache |
+
+`User.cancel_window_hours` / `stop_autobook_in_cancel_window` (v1.14.0): avoid autobooking inside the late-cancel penalization window. `Booking.book_despite_cancel_window` can force booking inside the window for one rule.
 
 `User.attendance_history_from` (v1.13.1): earliest month to backfill. Past months with `source=reservas` are immutable. Rollback: `migrations/v1.13.0/rollback_athlete_monthly_stats.sql`.
 
@@ -128,7 +130,7 @@ Ops-only (Docker, nginx, SSL): see [README.md](../README.md).
 
 - Versioned SQL: `migrations/vX.Y.Z/*.sql`
 - Apply: `python migrate.py vX.Y.Z` from repo root
-- DB path resolution: `instance/db.sqlite` → `db.sqlite` → `wodbooker/db.sqlite`
+- DB path: `instance/db.sqlite` only (`python migrate.py` uses the same path)
 - **Auto on startup**: only v1.9.0 if `user.push_notifications_enabled` column missing
 
 Existing versions: v1.6.0 through v1.12.0 (see `migrations/` folder).

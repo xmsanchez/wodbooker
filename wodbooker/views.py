@@ -135,6 +135,24 @@ class MyAdminIndexView(AdminIndexView):
         return redirect(url_for('.index'))
 
 
+def _configure_book_despite_cancel_window_field(form, obj=None):
+    if not login.current_user.is_authenticated:
+        return
+    user = login.current_user
+    n = user.cancel_window_hours if user.cancel_window_hours is not None else 3
+    default_word = 'deshabilitado' if user.stop_autobook_in_cancel_window else 'habilitado'
+    form.book_despite_cancel_window.label.text = (
+        f'Forzar reserva aunque esté fuera de ventana de autoreserva ({n} horas). '
+        f'Ignorará ventana de cancelación de autoreserva que está {default_word}.'
+    )
+    if obj is not None:
+        form.book_despite_cancel_window.data = obj.book_despite_cancel_window is True
+
+
+def _book_despite_cancel_window_from_form(form):
+    return True if form.book_despite_cancel_window.data else None
+
+
 class OffsetField(fields.IntegerField):
     """Custom field that sets default offset based on selected day of week"""
     
@@ -169,6 +187,7 @@ class BookingForm(form.Form):
     type_class = fields.SelectField('Tipo de clase a reservar (wod, openbox)', choices=[(0, 'wod'), (1, 'openbox')], 
                                     validators=[validators.DataRequired()], 
                                     description="Algunos días puede haber simultáneamente wod y openbox. Selecciona aquí el tipo de clase que deseas reservar.")
+    book_despite_cancel_window = fields.BooleanField('')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -722,6 +741,9 @@ class BookingAdmin(sqla.ModelView):
         stop_booking_loop(model)
         model.offset = form.offset  # Set calculated offset
         returned_value = super().update_model(form, model)
+        if returned_value:
+            model.book_despite_cancel_window = _book_despite_cancel_window_from_form(form)
+            db.session.commit()
         if model.is_active:
             start_booking_loop(model)
         return returned_value
@@ -746,6 +768,7 @@ class BookingAdmin(sqla.ModelView):
         booking = super().create_model(form)
         booking.user = login.current_user
         booking.offset = form.offset  # Set calculated offset
+        booking.book_despite_cancel_window = _book_despite_cancel_window_from_form(form)
         db.session.flush()
         db.session.commit()
         if booking.is_active:
@@ -754,6 +777,7 @@ class BookingAdmin(sqla.ModelView):
 
     def create_form(self, obj=None):
         form = super().create_form(obj)
+        _configure_book_despite_cancel_window_field(form, obj)
         if not form.url.data:
             last_booking = db.session.query(Booking).filter_by(user=login.current_user).order_by(Booking.id.desc()).first()
             if last_booking:
@@ -776,6 +800,7 @@ class BookingAdmin(sqla.ModelView):
 
     def edit_form(self, obj=None):
         form = super().edit_form(obj)
+        _configure_book_despite_cancel_window_field(form, obj)
         if obj:
             # Calculate and set the booking_open_day from the stored dow and offset
             booking_open_day = BookingForm.calculate_booking_open_day(obj.dow, obj.offset)
@@ -840,6 +865,15 @@ class UserForm(FlaskForm):
     push_reminder_15m = fields.BooleanField('Recordatorio 15 minutos antes')
     wodbuster_autosync_enabled = fields.BooleanField('Sincronización automática al cargar la página')
     auto_sync_training_descriptions = fields.BooleanField('Sincronización automática cuando no hay datos del entreno del día')
+    cancel_window_hours = fields.IntegerField(
+        'Ventana para cancelar autoreserva',
+        default=3,
+        validators=[validators.DataRequired(), validators.NumberRange(min=1, max=24)],
+        description='Horas antes de la clase en las que cancelar puede conllevar penalización en el box.',
+    )
+    stop_autobook_in_cancel_window = fields.BooleanField(
+        'Detener autoreserva para las clases que se encuentren dentro de la ventana',
+    )
 
 
 class UserView(sqla.ModelView):

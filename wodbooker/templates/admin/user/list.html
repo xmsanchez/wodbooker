@@ -43,6 +43,40 @@
     </div>
   </div>
 
+  <!-- Autoreserva y ventana de cancelación -->
+  <div class="card mb-3 compact-card" style="border-left: 4px solid #7c3aed;">
+    <div class="card-header" style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);">
+      <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i> Autoreserva y ventana de cancelación</h6>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        <strong>Ventana para cancelar autoreserva:</strong>
+        {{ data[0].cancel_window_hours|default(3) }} horas
+      </p>
+      <p class="mb-0">
+        <strong>Detener autoreserva dentro de la ventana:</strong>
+        {{ "Sí" if data[0].stop_autobook_in_cancel_window else "No" }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Preferencias Sincronización -->
+  <div class="card mb-3 compact-card" style="border-left: 4px solid #f59e0b;">
+    <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+      <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i> Preferencias Sincronización</h6>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        <strong>Sincronización automática al cargar la página:</strong>
+        {{ "Sí" if data[0].wodbuster_autosync_enabled else "No" }}
+      </p>
+      <p class="mb-0">
+        <strong>Sincronización automática cuando no hay datos del entreno del día:</strong>
+        {{ "Sí" if data[0].auto_sync_training_descriptions else "No" }}
+      </p>
+    </div>
+  </div>
+
   <!-- Preferencias Email -->
   <div class="card mb-3 compact-card" style="border-left: 4px solid #2563eb;">
     <div class="card-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
@@ -93,23 +127,6 @@
         {% endif %}
       </p>
       {% endif %}
-    </div>
-  </div>
-
-  <!-- Preferencias Sincronización -->
-  <div class="card mb-3 compact-card" style="border-left: 4px solid #f59e0b;">
-    <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
-      <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h6>
-    </div>
-    <div class="card-body">
-      <p class="mb-2">
-        <strong>Sincronización automática al cargar la página:</strong>
-        {{ "Sí" if data[0].wodbuster_autosync_enabled else "No" }}
-      </p>
-      <p class="mb-0">
-        <strong>Sincronización automática cuando no hay datos del entreno del día:</strong>
-        {{ "Sí" if data[0].auto_sync_training_descriptions else "No" }}
-      </p>
     </div>
   </div>
 </div>

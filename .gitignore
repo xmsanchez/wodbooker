@@ -139,8 +139,9 @@ cython_debug/
 
 # osX
 .DS*
-# Db
+# Db (canonical path is instance/db.sqlite; ignore stray copies)
 db.sqlite
+wodbooker/db.sqlite
 
 nginx/conf.d
 nginx/letsencrypt/**

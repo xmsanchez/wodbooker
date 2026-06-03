@@ -59,17 +59,13 @@ def execute_rollback(script):
     :param script: The rollback SQL script
     """
     import os
-    # Check if database is in instance/ or in the current directory
-    db_path = 'instance/db.sqlite'
+    import os.path as op
+    project_root = op.dirname(op.realpath(__file__))
+    db_path = op.join(project_root, 'instance', 'db.sqlite')
     if not os.path.exists(db_path):
-        db_path = 'db.sqlite'
-    if not os.path.exists(db_path):
-        # Try in wodbooker directory
-        db_path = 'wodbooker/db.sqlite'
-    
-    if not os.path.exists(db_path):
-        logging.error("Database file not found. Tried: instance/db.sqlite, db.sqlite, wodbooker/db.sqlite")
+        logging.error("Database file not found: %s", db_path)
         return False
+    logging.info("Using database: %s", db_path)
     
     engine = create_engine(f'sqlite:///{db_path}')
     conn = engine.connect()

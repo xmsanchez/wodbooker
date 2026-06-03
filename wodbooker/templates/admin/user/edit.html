@@ -20,6 +20,89 @@
     {{ form.hidden_tag() }}
 
     <div class="container-fluid">
+      <!-- Autoreserva y ventana de cancelación -->
+      <div class="card mb-3" style="border-left: 4px solid #7c3aed;">
+        <div class="card-header" style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);">
+          <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i> Autoreserva y ventana de cancelación</h6>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Si cancelas una clase muy cerca de su hora, el box puede aplicar penalización.
+            Estos ajustes evitan que WodBooker reserve automáticamente cuando ya estás dentro de esa ventana.
+          </p>
+          <div class="form-group">
+            <label class="form-label" for="{{ form.cancel_window_hours.id }}">
+              {{ form.cancel_window_hours.label.text }}
+            </label>
+            {{ form.cancel_window_hours(class="form-control", style="max-width: 6rem;") }}
+            {% if form.cancel_window_hours.description %}
+              <small class="form-text text-muted">{{ form.cancel_window_hours.description }}</small>
+            {% endif %}
+            {% if form.cancel_window_hours.errors %}
+              <div class="text-danger">
+                {% for error in form.cancel_window_hours.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="form-group mt-3">
+            <div class="form-check form-switch">
+              {{ form.stop_autobook_in_cancel_window(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.stop_autobook_in_cancel_window.id }}">
+                {{ form.stop_autobook_in_cancel_window.label.text }}
+              </label>
+            </div>
+            {% if form.stop_autobook_in_cancel_window.errors %}
+              <div class="text-danger">
+                {% for error in form.stop_autobook_in_cancel_window.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Preferencias Sincronización -->
+      <div class="card mb-3" style="border-left: 4px solid #f59e0b;">
+        <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+          <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i> Preferencias Sincronización</h6>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.wodbuster_autosync_enabled(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.wodbuster_autosync_enabled.id }}">
+                {{ form.wodbuster_autosync_enabled.label.text }}
+              </label>
+            </div>
+            {% if form.wodbuster_autosync_enabled.errors %}
+              <div class="text-danger">
+                {% for error in form.wodbuster_autosync_enabled.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.auto_sync_training_descriptions(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.auto_sync_training_descriptions.id }}">
+                {{ form.auto_sync_training_descriptions.label.text }}
+              </label>
+            </div>
+            {% if form.auto_sync_training_descriptions.errors %}
+              <div class="text-danger">
+                {% for error in form.auto_sync_training_descriptions.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
       <!-- Preferencias Email -->
       <div class="card mb-3" style="border-left: 4px solid #2563eb;">
         <div class="card-header" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
@@ -193,45 +276,6 @@
             
             <div id="push-error" class="alert alert-danger" style="display: none; margin-top: 15px;"></div>
             <div id="push-success" class="alert alert-success" style="display: none; margin-top: 15px;"></div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Preferencias Sincronización -->
-      <div class="card mb-3" style="border-left: 4px solid #f59e0b;">
-        <div class="card-header" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
-          <h6 class="mb-0"><i class="bi bi-arrow-clockwise me-2"></i>Preferencias Sincronización</h6>
-        </div>
-        <div class="card-body">
-          <div class="form-group">
-            <div class="form-check form-switch">
-              {{ form.wodbuster_autosync_enabled(class="form-check-input") }}
-              <label class="form-check-label" for="{{ form.wodbuster_autosync_enabled.id }}">
-                {{ form.wodbuster_autosync_enabled.label.text }}
-              </label>
-            </div>
-            {% if form.wodbuster_autosync_enabled.errors %}
-              <div class="text-danger">
-                {% for error in form.wodbuster_autosync_enabled.errors %}
-                  <small>{{ error }}</small>
-                {% endfor %}
-              </div>
-            {% endif %}
-          </div>
-          <div class="form-group">
-            <div class="form-check form-switch">
-              {{ form.auto_sync_training_descriptions(class="form-check-input") }}
-              <label class="form-check-label" for="{{ form.auto_sync_training_descriptions.id }}">
-                {{ form.auto_sync_training_descriptions.label.text }}
-              </label>
-            </div>
-            {% if form.auto_sync_training_descriptions.errors %}
-              <div class="text-danger">
-                {% for error in form.auto_sync_training_descriptions.errors %}
-                  <small>{{ error }}</small>
-                {% endfor %}
-              </div>
-            {% endif %}
           </div>
         </div>
       </div>

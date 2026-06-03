@@ -56,12 +56,36 @@ Example: class on Friday, `offset=2`, `available_at=12:00` → booking attempts 
 
 `_wait_for_booking_window` creates a `_TimeWaiter` if none exists and blocks until that datetime.
 
+## Cancel window (penalization avoidance)
+
+Per-user settings in **Preferencias**:
+
+- `User.cancel_window_hours` (default 3): hours before class start treated as the “late cancel” window.
+- `User.stop_autobook_in_cancel_window` (default false): when true, do not call `scraper.book` while inside that window unless overridden.
+
+Per-booking override:
+
+- `Booking.book_despite_cancel_window`: `NULL` = inherit user policy; `True` = always attempt inside the window if a slot appears.
+
+After the booking window wait, `_should_attempt_book_now` runs:
+
+1. If `hours_until_class >= cancel_window_hours` → attempt as usual.
+2. Else if override `True` → attempt.
+3. Else if user `stop_autobook_in_cancel_window` → do not attempt this week.
+4. Else → attempt (legacy behavior when stop is disabled).
+
+If blocked and `now < class_start - cancel_window_hours` → `_TimeWaiter` until that deadline (`EventMessage.WAIT_UNTIL_CANCEL_WINDOW`).
+
+If blocked and the deadline has passed → `skip_current_week` + `EventMessage.SKIP_CANCEL_WINDOW`.
+
+This also applies after `ClassIsFull` / `_EventWaiter`: a last-minute opening inside the window is not taken when stop is enabled.
+
 ## Waiters
 
 ### `_TimeWaiter`
 
 - `time.sleep` until `wait_datetime`.
-- Used for: booking window, `BookingNotAvailable.available_at`, network/API backoff.
+- Used for: booking window, cancel-window deadline, `BookingNotAvailable.available_at`, network/API backoff.
 
 ### `_EventWaiter`
 
