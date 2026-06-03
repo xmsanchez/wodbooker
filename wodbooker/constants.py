@@ -40,6 +40,13 @@ class EventMessage(StrEnum):
     _IGNORE_WEEK_MESSAGE = "Se ignora esta semana y se intentará reservar para el mismo día de la siguiente semana"
     CLASS_NOT_FOUND = f"El %s no hay clase a las %s. {_IGNORE_WEEK_MESSAGE}"
     BOOKING_ERROR = f"Error al reservar la clase del %s: %s. {_IGNORE_WEEK_MESSAGE}"
+    SKIP_CANCEL_WINDOW = (
+        f"Dentro de la ventana de cancelación (%s h antes de la clase). "
+        f"No se reservará esta semana. {_IGNORE_WEEK_MESSAGE}"
+    )
+    WAIT_UNTIL_CANCEL_WINDOW = (
+        "Esperando hasta el %s (fuera de la ventana de %s h) para reservar la clase del %s"
+    )
     PAUSED = "Pausado"
 
     def __str__(self):

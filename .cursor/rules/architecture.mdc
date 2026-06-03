@@ -25,7 +25,7 @@ Flask app that auto-books WodBuster classes. Bootstrap: `wodbooker/__init__.py` 
 - **Threads**: One `Booker` per active `Booking`; global lock `_GLOBAL_BOOKING_LOCK` (min 0.5s between any user's book attempts).
 - **Whitelist**: `BOOKING_WHITELIST_EMAILS` — if non-empty, only listed emails can start booking loops.
 - **Admin URL**: Flask-Admin at `/` (not `/admin`). `/admin/*` redirects to `/`.
-- **DB file**: `wodbooker/db.sqlite` (SQLAlchemy URI in `__init__.py`).
+- **DB file**: `instance/db.sqlite` at project root (`wodbooker/db_path.py`).
 - **Do not** duplicate Docker/SSL/VAPID setup — see [README.md](../../README.md).
 
 ## Background work at startup
