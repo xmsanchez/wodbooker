@@ -1,0 +1,65 @@
+/* WodBuster-style training board (light admin theme) */
+.wod-training-description {
+  color: #1e293b;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.wod-training-description h1 {
+  display: none;
+}
+
+.wod-training-description h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+  margin: 1rem 0 0.5rem;
+  padding: 0;
+}
+
+.wod-training-description h2:first-child {
+  margin-top: 0;
+}
+
+.wod-training-description div {
+  margin-bottom: 0.35rem;
+}
+
+.wod-training-description span[style*="underline"],
+.wod-training-description u {
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.wod-training-description strong {
+  font-weight: 600;
+}
+
+.wod-training-description .movimientos {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.wod-training-description .movimientos h2 {
+  margin-bottom: 0.75rem;
+}
+
+.wod-training-description .flex-video {
+  margin: 0.5rem auto 1rem;
+  max-width: 560px;
+}
+
+.wod-training-description .flex-video iframe {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 6px;
+}
+
+.wod-training-description canvas.bmc {
+  display: none;
+}

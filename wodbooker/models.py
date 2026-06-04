@@ -136,7 +136,7 @@ class ClassTrainingDescription(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     class_date = db.Column(db.Date, nullable=False, index=True)
     training_name = db.Column(db.String(128), nullable=False)  # e.g., "WOD", "CROSSFIT", "OPEN BOX"
-    description = db.Column(db.Text, nullable=True)  # Cleaned text description
+    description = db.Column(db.Text, nullable=True)  # WodBuster HTML from ClasesDesc (sanitized at display)
     id_pizarra = db.Column(db.Integer, nullable=False)  # ID to link with class (required for uniqueness)
     fetched_at = db.Column(db.DateTime, default=datetime.now)
     

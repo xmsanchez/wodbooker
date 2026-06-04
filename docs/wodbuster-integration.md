@@ -62,6 +62,15 @@ Common events:
 | `get_athlete_services` | `/api/ui/Master_MisServicios` | `AthleteMonthlyStats` (quota + billing-period cancellations) |
 | `get_athlete_reservations_range` | `/api/ui/Master_MisServicios_Reservas` | `AthleteMonthlyStats` (per calendar month, immutable once cached) |
 
+### Training descriptions (`ClasesDesc`)
+
+- `Descripcion` is stored as **HTML** in `ClassTrainingDescription.description` (not stripped at sync).
+- **Board title** (`training_name`): `<h1>` in `Descripcion` first (e.g. Hybrid), else schedule slot name from `Data`, else pizarra `Nombre`.
+- Admin UI merges live API HTML over stale plain-text DB rows; auto-sync also rewrites legacy plain-text when enabled.
+- Sanitize at display in `training_description_html.py` (headings, div/span, br, strong, u; `canvas` and **Movimientos** section with videos are removed).
+- **Display day**: booking list shows one day in Europe/Madrid — today until tomorrow has at least one description with visible text, then tomorrow only. Both days fetch API when `athlete_id` is set.
+- Legacy plain-text rows (no HTML tags) use a simple header formatter until re-synced.
+
 Requires `user.athlete_id` (set at login from `preferences.aspx`).
 
 ### Attendance metrics (do not confuse)

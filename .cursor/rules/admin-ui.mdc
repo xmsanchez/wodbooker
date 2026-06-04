@@ -25,6 +25,11 @@ alwaysApply: false
 - `POST .../sync-wodbuster-bookings`
 - `POST .../cancel-wodbuster-booking`
 
+## Training descriptions (booking list)
+
+- One Madrid calendar day: today until tomorrow has synced WOD HTML, then tomorrow.
+- Rendered via `training_description_html.py` + `static/training-description.css` (sanitized WodBuster HTML).
+
 ## Templates
 
 - Custom list/edit under `wodbooker/templates/admin/booking/`

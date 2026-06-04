@@ -1,6 +1,5 @@
 import logging
-import re
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from collections import defaultdict
 import pickle
 import requests
@@ -23,6 +22,13 @@ from .attendance_stats import sync_wodbuster_all, get_attendance_dashboard
 from .scraper import refresh_scraper, get_scraper
 from .exceptions import LoginError, InvalidWodBusterResponse, PasswordRequired
 from .constants import EventMessage, DAYS_OF_WEEK, DEFAULT_OFFSETS_BY_DAY
+from .training_description_html import (
+    prepare_training_description,
+    visible_text_len,
+    description_is_html,
+    extract_board_title,
+)
+import pytz
 
 # Training description logger (file-only, no console)
 training_desc_logger = logging.getLogger('training_descriptions')
@@ -497,195 +503,61 @@ class BookingAdmin(sqla.ModelView):
         
         kwargs['wodbuster_bookings'] = wodbuster_bookings
         
-        # Fetch training descriptions for today and tomorrow only
-        training_descriptions_by_date = {}
+        kwargs['training_display_date'] = None
+        kwargs['training_descriptions'] = []
         if login.current_user.is_authenticated:
-            from datetime import date, timedelta
-            today = date.today()
+            user = login.current_user
+            today = datetime.now(pytz.timezone('Europe/Madrid')).date()
             tomorrow = today + timedelta(days=1)
-            
-            training_desc_logger.info("Fetching training descriptions for user %s (ID: %d) for today (%s) and tomorrow (%s)", 
-                        login.current_user.email, login.current_user.id, today, tomorrow)
-            
-            # Get training descriptions from DB for today and tomorrow
+
+            training_desc_logger.info(
+                "Fetching training descriptions for user %s (ID: %d) for today (%s) and tomorrow (%s)",
+                user.email, user.id, today, tomorrow,
+            )
+
             descriptions = db.session.query(ClassTrainingDescription).filter(
-                ClassTrainingDescription.user_id == login.current_user.id,
-                ClassTrainingDescription.class_date.in_([today, tomorrow])
-            ).order_by(ClassTrainingDescription.class_date, ClassTrainingDescription.training_name).all()
-            
-            training_desc_logger.info("Found %d training descriptions in DB for user %s (today and tomorrow)", 
-                        len(descriptions), login.current_user.email)
-            
-            # Group by date - create a dict mapping id_pizarra -> description for easy lookup
+                ClassTrainingDescription.user_id == user.id,
+                ClassTrainingDescription.class_date.in_([today, tomorrow]),
+            ).order_by(
+                ClassTrainingDescription.class_date,
+                ClassTrainingDescription.training_name,
+            ).all()
+
+            training_desc_logger.info(
+                "Found %d training descriptions in DB for user %s (today and tomorrow)",
+                len(descriptions), user.email,
+            )
+
             db_descriptions_by_date = {}
-            db_descriptions_by_pizarra = {}  # For tomorrow: id_pizarra -> description object
+            db_by_pizarra = {today: {}, tomorrow: {}}
             for desc in descriptions:
-                if desc.class_date not in db_descriptions_by_date:
-                    db_descriptions_by_date[desc.class_date] = []
-                db_descriptions_by_date[desc.class_date].append(desc)
-                if desc.class_date == tomorrow:
-                    db_descriptions_by_pizarra[desc.id_pizarra] = desc
-            
-            # For today, use all descriptions from DB
-            if today in db_descriptions_by_date:
-                training_descriptions_by_date[today] = db_descriptions_by_date[today]
-            
-            # For tomorrow, fetch available training types from API and merge with DB descriptions
-            if login.current_user.athlete_id:
-                try:
-                    # Get box URL from user's most recent booking
-                    box_url = None
-                    last_booking = db.session.query(Booking).filter_by(user_id=login.current_user.id).order_by(Booking.id.desc()).first()
-                    if last_booking and last_booking.url:
-                        box_url = last_booking.url
-                    else:
-                        scraper = get_scraper(login.current_user.email, login.current_user.cookie)
-                        box_url = scraper.get_box_url()
-                    
-                    if box_url:
-                        scraper = get_scraper(login.current_user.email, login.current_user.cookie)
-                        api_training_types = scraper.get_training_descriptions(box_url, login.current_user.athlete_id, tomorrow)
-                        
-                        training_desc_logger.info("Fetched %d training types from API for tomorrow (%s)", 
-                                    len(api_training_types), tomorrow)
-                        
-                        # Create a set of training types from API
-                        tomorrow_descriptions = []
-                        api_training_by_pizarra = {}
-                        for api_training in api_training_types:
-                            id_pizarra = api_training.get('id_pizarra')
-                            training_name = api_training.get('training_name', '')
-                            description = api_training.get('description', '')
-                            
-                            if id_pizarra:
-                                api_training_by_pizarra[id_pizarra] = api_training
-                                
-                                # Check if we have this in DB
-                                if id_pizarra in db_descriptions_by_pizarra:
-                                    # Use DB version (it's more up-to-date)
-                                    desc = db_descriptions_by_pizarra[id_pizarra]
-                                    tomorrow_descriptions.append(desc)
-                                else:
-                                    # Create a temporary object for API-only training type
-                                    class TempDesc:
-                                        def __init__(self, training_name, description, id_pizarra):
-                                            self.training_name = training_name
-                                            self.description = description
-                                            self.id_pizarra = id_pizarra
-                                            self.formatted_description = None
-                                            self.class_date = tomorrow
-                                            # Use negative id_pizarra as temporary ID (DB IDs are positive)
-                                            self.id = -id_pizarra if id_pizarra else None
-                                    
-                                    temp_desc = TempDesc(training_name, description, id_pizarra)
-                                    tomorrow_descriptions.append(temp_desc)
-                                    training_desc_logger.info("Added API-only training type for tomorrow: %s (id_pizarra: %s)", 
-                                                training_name, id_pizarra)
-                        
-                        # Add any DB descriptions that weren't in API (shouldn't happen, but just in case)
-                        for id_pizarra, desc in db_descriptions_by_pizarra.items():
-                            if id_pizarra not in api_training_by_pizarra:
-                                tomorrow_descriptions.append(desc)
-                                training_desc_logger.info("Added DB-only training type for tomorrow: %s (id_pizarra: %s)", 
-                                            desc.training_name, id_pizarra)
-                        
-                        # Check if auto-sync is enabled and if we need to sync missing descriptions
-                        # This check happens AFTER building the list so we can detect training types showing "Aún no hay el entreno disponible"
-                        auto_sync_enabled = login.current_user.auto_sync_training_descriptions
-                        needs_sync = False
-                        
-                        # Check if any training types in the final list are missing descriptions
-                        for desc in tomorrow_descriptions:
-                            # Check if description is None, empty, or empty after stripping
-                            if not desc.description or not desc.description.strip():
-                                needs_sync = True
-                                training_desc_logger.info("Found training type '%s' without description, will trigger auto-sync", desc.training_name)
-                                break
-                        
-                        # Auto-sync if enabled and needed
-                        if auto_sync_enabled and needs_sync:
-                            training_desc_logger.info("Auto-syncing training descriptions for tomorrow (%s) - user has auto-sync enabled", tomorrow)
-                            try:
-                                sync_result = sync_training_descriptions_for_date(login.current_user, tomorrow, box_url)
-                                if sync_result['success']:
-                                    training_desc_logger.info("Auto-sync completed for tomorrow: %d new, %d updated", 
-                                                sync_result['new'], sync_result['updated'])
-                                    # Refresh DB descriptions after sync
-                                    refreshed_descriptions = db.session.query(ClassTrainingDescription).filter(
-                                        ClassTrainingDescription.user_id == login.current_user.id,
-                                        ClassTrainingDescription.class_date == tomorrow
-                                    ).all()
-                                    # Update our local dict
-                                    db_descriptions_by_pizarra = {
-                                        desc.id_pizarra: desc for desc in refreshed_descriptions
-                                    }
-                                    # Rebuild tomorrow_descriptions with updated data
-                                    tomorrow_descriptions = []
-                                    for api_training in api_training_types:
-                                        id_pizarra = api_training.get('id_pizarra')
-                                        training_name = api_training.get('training_name', '')
-                                        if id_pizarra:
-                                            if id_pizarra in db_descriptions_by_pizarra:
-                                                desc = db_descriptions_by_pizarra[id_pizarra]
-                                                tomorrow_descriptions.append(desc)
-                                            else:
-                                                # Still no DB entry, use API data
-                                                description = api_training.get('description', '')
-                                                class TempDesc:
-                                                    def __init__(self, training_name, description, id_pizarra):
-                                                        self.training_name = training_name
-                                                        self.description = description
-                                                        self.id_pizarra = id_pizarra
-                                                        self.formatted_description = None
-                                                        self.class_date = tomorrow
-                                                        self.id = -id_pizarra if id_pizarra else None
-                                                temp_desc = TempDesc(training_name, description, id_pizarra)
-                                                tomorrow_descriptions.append(temp_desc)
-                                else:
-                                    logging.warning("Auto-sync failed for tomorrow: %s", sync_result.get('errors', []))
-                            except Exception as e:
-                                logging.error("Error during auto-sync for tomorrow: %s", str(e), exc_info=True)
-                        
-                        if tomorrow_descriptions:
-                            training_descriptions_by_date[tomorrow] = tomorrow_descriptions
-                        else:
-                            # No training types available for tomorrow
-                            training_descriptions_by_date[tomorrow] = []
-                            
-                except Exception as e:
-                    logging.error("Error fetching training types from API for tomorrow: %s", str(e), exc_info=True)
-                    # Fallback to DB-only descriptions for tomorrow
-                    if tomorrow in db_descriptions_by_date:
-                        training_descriptions_by_date[tomorrow] = db_descriptions_by_date[tomorrow]
+                db_descriptions_by_date.setdefault(desc.class_date, []).append(desc)
+                if desc.class_date in db_by_pizarra:
+                    db_by_pizarra[desc.class_date][desc.id_pizarra] = desc
+
+            tomorrow_descriptions = _fetch_training_descriptions_for_date(
+                user, tomorrow, db_by_pizarra[tomorrow], db_descriptions_by_date.get(tomorrow),
+            )
+
+            display_date = _pick_training_display_date(today, tomorrow, tomorrow_descriptions)
+            if display_date == tomorrow:
+                training_list = tomorrow_descriptions
             else:
-                # No athlete_id, just use DB descriptions
-                if tomorrow in db_descriptions_by_date:
-                    training_descriptions_by_date[tomorrow] = db_descriptions_by_date[tomorrow]
-            
-            training_desc_logger.info("Grouped training descriptions by date: %d dates with descriptions", 
-                        len(training_descriptions_by_date))
-            for desc_date, descs in training_descriptions_by_date.items():
-                training_desc_logger.info("  Date %s: %d descriptions (%s)", 
-                           desc_date, len(descs), [d.training_name for d in descs])
-            
-            # Format descriptions with bold headers
-            for desc_date, descs in training_descriptions_by_date.items():
-                for desc in descs:
-                    if desc.description:
-                        desc.formatted_description = _format_training_description(desc.description)
-                    else:
-                        desc.formatted_description = None
-            
-            # Convert to sorted list of tuples for easier template iteration
-            training_descriptions_by_date = sorted(training_descriptions_by_date.items())
-            training_desc_logger.info("Final training_descriptions_by_date: %d date entries", 
-                        len(training_descriptions_by_date))
+                training_list = _fetch_training_descriptions_for_date(
+                    user, today, db_by_pizarra[today], db_descriptions_by_date.get(today),
+                )
+
+            _apply_formatted_descriptions(training_list)
+
+            if training_list:
+                kwargs['training_display_date'] = display_date
+                kwargs['training_descriptions'] = training_list
+            training_desc_logger.info(
+                "Display date %s: %d descriptions (%s)",
+                display_date, len(training_list), [d.training_name for d in training_list],
+            )
         else:
             training_desc_logger.warning("User not authenticated, skipping training descriptions fetch")
-        
-        kwargs['training_descriptions_by_date'] = training_descriptions_by_date
-        training_desc_logger.info("Passing training_descriptions_by_date to template: %s", 
-                    "present" if training_descriptions_by_date else "empty")
 
         kwargs['attendance_dashboard'] = None
         if login.current_user.is_authenticated and login.current_user.athlete_id:
@@ -928,6 +800,166 @@ class UserView(sqla.ModelView):
         return count, data
 
 
+_MADRID_TZ = pytz.timezone('Europe/Madrid')
+
+
+class _TempTrainingDesc:
+    """Stand-in for ClassTrainingDescription when only API data exists."""
+
+    def __init__(self, training_name, description, id_pizarra, class_date):
+        self.training_name = training_name
+        self.description = description
+        self.id_pizarra = id_pizarra
+        self.formatted_description = None
+        self.display_title = None
+        self.class_date = class_date
+        self.id = -id_pizarra if id_pizarra else None
+
+
+def _overlay_api_on_db_desc(db_desc, api_training):
+    """Prefer live API HTML over stale plain-text rows still in the DB."""
+    api_description = (api_training.get('description') or '').strip()
+    db_text = (db_desc.description or '').strip()
+    if description_is_html(api_description) and not description_is_html(db_text):
+        db_desc.description = api_description
+        api_name = api_training.get('training_name', '')
+        if api_name:
+            db_desc.training_name = api_name
+        training_desc_logger.info(
+            "Using API HTML for id_pizarra %s (replacing legacy plain-text cache)",
+            db_desc.id_pizarra,
+        )
+    return db_desc
+
+
+def _get_user_box_url(user):
+    last_booking = (
+        db.session.query(Booking)
+        .filter_by(user_id=user.id)
+        .order_by(Booking.id.desc())
+        .first()
+    )
+    if last_booking and last_booking.url:
+        return last_booking.url
+    return get_scraper(user.email, user.cookie).get_box_url()
+
+
+def _merge_descriptions_for_date(target_date, db_by_pizarra, api_training_types):
+    merged = []
+    api_by_pizarra = {}
+    for api_training in api_training_types:
+        id_pizarra = api_training.get('id_pizarra')
+        if not id_pizarra:
+            continue
+        api_by_pizarra[id_pizarra] = api_training
+        if id_pizarra in db_by_pizarra:
+            merged.append(_overlay_api_on_db_desc(db_by_pizarra[id_pizarra], api_training))
+        else:
+            merged.append(_TempTrainingDesc(
+                api_training.get('training_name', ''),
+                api_training.get('description', ''),
+                id_pizarra,
+                target_date,
+            ))
+            training_desc_logger.info(
+                "Added API-only training type for %s: %s (id_pizarra: %s)",
+                target_date, api_training.get('training_name', ''), id_pizarra,
+            )
+    for id_pizarra, desc in db_by_pizarra.items():
+        if id_pizarra not in api_by_pizarra:
+            merged.append(desc)
+            training_desc_logger.info(
+                "Added DB-only training type for %s: %s (id_pizarra: %s)",
+                target_date, desc.training_name, id_pizarra,
+            )
+    return merged
+
+
+def _description_needs_sync(desc) -> bool:
+    text = desc.description
+    if not text or not str(text).strip():
+        return True
+    return not description_is_html(str(text))
+
+
+def _fetch_training_descriptions_for_date(user, target_date, db_by_pizarra, db_list):
+    if not user.athlete_id:
+        return list(db_list or [])
+
+    try:
+        box_url = _get_user_box_url(user)
+    except Exception as e:
+        logging.error("Error resolving box URL for training descriptions: %s", e, exc_info=True)
+        return list(db_list or [])
+
+    if not box_url:
+        return list(db_list or [])
+
+    try:
+        scraper = get_scraper(user.email, user.cookie)
+        api_training_types = scraper.get_training_descriptions(
+            box_url, user.athlete_id, target_date,
+        )
+        training_desc_logger.info(
+            "Fetched %d training types from API for %s",
+            len(api_training_types), target_date,
+        )
+        merged = _merge_descriptions_for_date(target_date, db_by_pizarra, api_training_types)
+
+        needs_sync = any(_description_needs_sync(desc) for desc in merged)
+        if user.auto_sync_training_descriptions and needs_sync:
+            training_desc_logger.info(
+                "Auto-syncing training descriptions for %s (missing or legacy plain-text)",
+                target_date,
+            )
+            try:
+                sync_result = sync_training_descriptions_for_date(user, target_date, box_url)
+                if sync_result['success']:
+                    refreshed = db.session.query(ClassTrainingDescription).filter(
+                        ClassTrainingDescription.user_id == user.id,
+                        ClassTrainingDescription.class_date == target_date,
+                    ).all()
+                    db_by_pizarra = {d.id_pizarra: d for d in refreshed}
+                    merged = _merge_descriptions_for_date(
+                        target_date, db_by_pizarra, api_training_types,
+                    )
+                else:
+                    logging.warning(
+                        "Auto-sync failed for %s: %s", target_date, sync_result.get('errors', []),
+                    )
+            except Exception as e:
+                logging.error("Error during auto-sync for %s: %s", target_date, e, exc_info=True)
+
+        return merged
+    except Exception as e:
+        logging.error(
+            "Error fetching training types from API for %s: %s", target_date, e, exc_info=True,
+        )
+        return list(db_list or [])
+
+
+def _pick_training_display_date(today, tomorrow, tomorrow_descriptions):
+    if any(
+        desc.description and visible_text_len(desc.description) > 0
+        for desc in tomorrow_descriptions
+    ):
+        return tomorrow
+    return today
+
+
+def _apply_formatted_descriptions(descriptions):
+    for desc in descriptions:
+        desc.formatted_description = (
+            prepare_training_description(desc.description)
+            if desc.description
+            else None
+        )
+        desc.display_title = (
+            extract_board_title(desc.description or '', '')
+            or desc.training_name
+        )
+
+
 def _get_cookie_expiration_date(cookie):
     session = cloudscraper.create_scraper()
     session.cookies.update(pickle.loads(cookie))
@@ -937,95 +969,3 @@ def _get_cookie_expiration_date(cookie):
     except (StopIteration, TypeError):
         return None
 
-
-def _format_training_description(text: str) -> str:
-    """
-    Format training description text with bold headers and proper spacing.
-    Headers like "WARM UP", "STRENGTH", "WOD" are made bold.
-    Stops displaying content after "MOVIMIENTOS" section.
-    :param text: Plain text description
-    :return: HTML formatted text with bold headers (content stops at MOVIMIENTOS)
-    """
-    if not text:
-        return ""
-    
-    # Clean HTML entities like &nbsp;
-    text = text.replace('&nbsp;', ' ')
-    # Also handle other common HTML entities
-    text = text.replace('&amp;', '&')
-    text = text.replace('&lt;', '<')
-    text = text.replace('&gt;', '>')
-    text = text.replace('&quot;', '"')
-    
-    # Clean up multiple spaces
-    text = re.sub(r' +', ' ', text)
-    
-    lines = text.split('\n')
-    
-    # Remove excessive empty lines to make text more compact
-    compact_lines = []
-    prev_empty = False
-    for line in lines:
-        is_empty = not line.strip()
-        if is_empty and prev_empty:
-            continue  # Skip consecutive empty lines
-        compact_lines.append(line)
-        prev_empty = is_empty
-    lines = compact_lines
-    
-    formatted_lines = []
-    
-    # Common header patterns (case-insensitive)
-    header_patterns = [
-        r'^WARM\s+UP',
-        r'^WARMUP',
-        r'^ARM\s+UP',  # Handle typo variant
-        r'^STRENGTH',
-        r'^STRENGHT',  # Handle typo variant
-        r'^STRENGTH\s+',
-        r'^WOD\s*$',
-        r'^METCON',
-        r'^COOL\s+DOWN',
-        r'^MOBILITY',
-        r'^STRETCH',
-        r'^MOVIMIENTOS',
-        r'^MOVEMENTS',
-    ]
-    
-    # Stop processing after "MOVIMIENTOS" section
-    stop_after_movimientos = False
-    
-    for i, line in enumerate(lines):
-        original_line = line
-        line = line.strip()
-        if not line:
-            if not stop_after_movimientos:
-                formatted_lines.append('')
-            continue
-        
-        # Check if this is the MOVIMIENTOS section - stop after this
-        if re.match(r'^MOVIMIENTOS', line, re.IGNORECASE):
-            stop_after_movimientos = True
-            # Don't include this line or anything after it
-            break
-        
-        # Check if this line is a header
-        is_header = False
-        for pattern in header_patterns:
-            if re.match(pattern, line, re.IGNORECASE):
-                is_header = True
-                break
-        
-        # Also check if line is all caps and short (likely a header)
-        # More lenient: allow up to 6 words for headers like "COOL DOWN"
-        if not is_header and len(line) < 40 and line.isupper() and len(line.split()) <= 6:
-            is_header = True
-        
-        if is_header:
-            # Don't add extra spacing before header - keep it compact
-            # Make header bold with very compact styling (no margins, tight line-height)
-            formatted_lines.append(f'<strong style="font-size: 1.1em; font-weight: 700; color: #1e293b; display: block; margin: 0; padding: 0; line-height: 1.2;">{line}</strong>')
-        else:
-            formatted_lines.append(line)
-    
-    return '\n'.join(formatted_lines)
