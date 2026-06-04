@@ -405,100 +405,19 @@ class BookingAdmin(sqla.ModelView):
         kwargs['DAYS_OF_WEEK'] = DAYS_OF_WEEK
         kwargs['weekday_stats'] = getattr(self, '_weekday_stats', {})
         
-        # Map class names to colors (same as weekly_classes route)
-        class_color_map_by_name = {
-            'GAP': '#ec4899',  # pink
-            'ENDURANCE': '#0ea5e9',  # light blue
-        }
-        
-        # Map class type IDs to colors (for fallback)
-        class_color_map_by_id = {
-            1: '#059669',  # green - Wod
-            2: '#000000',  # black - Open Box
-            7: '#000000',  # black - Open Box*
-            9: '#2563eb',  # blue - Gymnastics
-            10: '#be185d',  # dark pink - Teens
-            14: '#64748b',  # gray - Adapted Training
-            17: '#eab308',  # yellow - Minimal
-            18: '#0ea5e9',  # light blue - Endurance
-            19: '#ec4899',  # pink - GAP
-        }
-        
-        # Fetch WodBuster bookings for the current week only
         wodbuster_bookings = []
+        madrid_today = None
         if login.current_user.is_authenticated:
-            from datetime import date, timedelta
-            today = date.today()
-            
-            # Get all WodBuster bookings from today onwards
+            madrid_today = datetime.now(_MADRID_TZ).date()
             bookings = db.session.query(WodBusterBooking).filter(
                 WodBusterBooking.user_id == login.current_user.id,
                 WodBusterBooking.is_cancelled == False,
-                WodBusterBooking.class_date >= today
+                WodBusterBooking.class_date >= madrid_today,
             ).order_by(WodBusterBooking.class_date, WodBusterBooking.class_time).all()
-            
-            # Process bookings to add color information
             for booking in bookings:
-                # Use class_name as the friendly name (it contains the friendly name from Nombre field in JSON)
-                # If class_name is None or empty, try to derive from class_type as fallback
-                if booking.class_name:
-                    friendly_name = booking.class_name
-                elif booking.class_type:
-                    # Fallback: try to map class_type to friendly name
-                    if booking.class_type == 'wod':
-                        friendly_name = 'Wod'
-                    elif booking.class_type == 'openbox':
-                        friendly_name = 'Open Box'
-                    elif booking.class_type.startswith('type_'):
-                        try:
-                            id_e = int(booking.class_type.split('_')[1])
-                            # Map some known IDs
-                            if id_e == 17:
-                                friendly_name = 'Minimal'
-                            elif id_e == 14:
-                                friendly_name = 'Adapted Training'
-                            elif id_e == 10:
-                                friendly_name = 'Teens'
-                            elif id_e == 9:
-                                friendly_name = 'Gymnastics'
-                            elif id_e == 18:
-                                friendly_name = 'Endurance'
-                            elif id_e == 19:
-                                friendly_name = 'GAP'
-                            else:
-                                friendly_name = f'Type {id_e}'
-                        except (ValueError, IndexError):
-                            friendly_name = booking.class_type
-                    else:
-                        friendly_name = booking.class_type
-                else:
-                    friendly_name = 'N/A'
-                
-                # Get color: first check by name (uppercase), then try to extract ID from class_type
-                friendly_name_upper = friendly_name.upper()
-                if friendly_name_upper in class_color_map_by_name:
-                    booking.badge_color = class_color_map_by_name[friendly_name_upper]
-                else:
-                    # Try to extract ID from class_type (e.g., 'type_18' -> 18, 'wod' -> 1, 'openbox' -> 2)
-                    id_e = None
-                    if booking.class_type:
-                        if booking.class_type == 'wod':
-                            id_e = 1
-                        elif booking.class_type == 'openbox':
-                            id_e = 2
-                        elif booking.class_type.startswith('type_'):
-                            try:
-                                id_e = int(booking.class_type.split('_')[1])
-                            except (ValueError, IndexError):
-                                pass
-                    
-                    if id_e and id_e in class_color_map_by_id:
-                        booking.badge_color = class_color_map_by_id[id_e]
-                    else:
-                        booking.badge_color = '#64748b'  # default gray
-                
+                friendly_name = _wodbuster_booking_display_name(booking)
                 booking.badge_name = friendly_name
-            
+                booking.badge_color = _wodbuster_booking_badge_color(booking, friendly_name)
             wodbuster_bookings = bookings
         
         kwargs['wodbuster_bookings'] = wodbuster_bookings
@@ -507,7 +426,7 @@ class BookingAdmin(sqla.ModelView):
         kwargs['training_descriptions'] = []
         if login.current_user.is_authenticated:
             user = login.current_user
-            today = datetime.now(pytz.timezone('Europe/Madrid')).date()
+            today = madrid_today or datetime.now(_MADRID_TZ).date()
             tomorrow = today + timedelta(days=1)
 
             training_desc_logger.info(
@@ -550,6 +469,9 @@ class BookingAdmin(sqla.ModelView):
             _apply_formatted_descriptions(training_list)
 
             if training_list:
+                _attach_reservation_hints(
+                    training_list, display_date, today, wodbuster_bookings,
+                )
                 kwargs['training_display_date'] = display_date
                 kwargs['training_descriptions'] = training_list
             training_desc_logger.info(
@@ -802,6 +724,110 @@ class UserView(sqla.ModelView):
 
 _MADRID_TZ = pytz.timezone('Europe/Madrid')
 
+_WODBUSTER_CLASS_COLOR_BY_NAME = {
+    'GAP': '#ec4899',
+    'ENDURANCE': '#0ea5e9',
+}
+
+_WODBUSTER_CLASS_COLOR_BY_ID = {
+    1: '#059669',
+    2: '#000000',
+    7: '#000000',
+    9: '#2563eb',
+    10: '#be185d',
+    14: '#64748b',
+    17: '#eab308',
+    18: '#0ea5e9',
+    19: '#ec4899',
+}
+
+
+def _wodbuster_booking_display_name(booking) -> str:
+    if booking.class_name:
+        return booking.class_name
+    if booking.class_type:
+        if booking.class_type == 'wod':
+            return 'Wod'
+        if booking.class_type == 'openbox':
+            return 'Open Box'
+        if booking.class_type.startswith('type_'):
+            try:
+                id_e = int(booking.class_type.split('_')[1])
+            except (ValueError, IndexError):
+                return booking.class_type
+            type_names = {
+                17: 'Minimal',
+                14: 'Adapted Training',
+                10: 'Teens',
+                9: 'Gymnastics',
+                18: 'Endurance',
+                19: 'GAP',
+            }
+            return type_names.get(id_e, f'Type {id_e}')
+        return booking.class_type
+    return 'N/A'
+
+
+def _wodbuster_booking_badge_color(booking, friendly_name: str) -> str:
+    friendly_name_upper = friendly_name.upper()
+    if friendly_name_upper in _WODBUSTER_CLASS_COLOR_BY_NAME:
+        return _WODBUSTER_CLASS_COLOR_BY_NAME[friendly_name_upper]
+    id_e = None
+    if booking.class_type:
+        if booking.class_type == 'wod':
+            id_e = 1
+        elif booking.class_type == 'openbox':
+            id_e = 2
+        elif booking.class_type.startswith('type_'):
+            try:
+                id_e = int(booking.class_type.split('_')[1])
+            except (ValueError, IndexError):
+                pass
+    if id_e and id_e in _WODBUSTER_CLASS_COLOR_BY_ID:
+        return _WODBUSTER_CLASS_COLOR_BY_ID[id_e]
+    return '#64748b'
+
+
+def _normalize_training_label(label: str) -> str:
+    return (label or '').strip().casefold()
+
+
+def _format_reservation_times(times) -> str:
+    return ' y '.join(t.strftime('%H:%M') for t in sorted(times))
+
+
+def _attach_reservation_hints(training_list, display_date, madrid_today, bookings):
+    tomorrow = madrid_today + timedelta(days=1)
+    if display_date == madrid_today:
+        day_word = 'hoy'
+    elif display_date == tomorrow:
+        day_word = 'mañana'
+    else:
+        day_word = None
+
+    day_bookings = [
+        b for b in bookings
+        if b.class_date == display_date and not b.is_cancelled
+    ]
+
+    for desc in training_list:
+        desc.reservation_hint = None
+        if not day_word:
+            continue
+        label = _normalize_training_label(desc.display_title or desc.training_name)
+        if not label:
+            continue
+        matching_times = []
+        for booking in day_bookings:
+            booking_label = _normalize_training_label(
+                booking.badge_name or _wodbuster_booking_display_name(booking),
+            )
+            if booking_label == label:
+                matching_times.append(booking.class_time)
+        if matching_times:
+            times_str = _format_reservation_times(matching_times)
+            desc.reservation_hint = f'Tienes reserva {day_word} a las {times_str}'
+
 
 class _TempTrainingDesc:
     """Stand-in for ClassTrainingDescription when only API data exists."""
@@ -812,6 +838,7 @@ class _TempTrainingDesc:
         self.id_pizarra = id_pizarra
         self.formatted_description = None
         self.display_title = None
+        self.reservation_hint = None
         self.class_date = class_date
         self.id = -id_pizarra if id_pizarra else None
 
@@ -958,6 +985,7 @@ def _apply_formatted_descriptions(descriptions):
             extract_board_title(desc.description or '', '')
             or desc.training_name
         )
+        desc.reservation_hint = None
 
 
 def _get_cookie_expiration_date(cookie):

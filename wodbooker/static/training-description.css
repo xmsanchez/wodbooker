@@ -1,3 +1,47 @@
+/* Entrenos del día row headers */
+.training-desc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 0.75rem;
+}
+
+.training-desc-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.training-desc-reservation-hint {
+  flex: 0 1 auto;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #b45309;
+  text-align: right;
+  white-space: nowrap;
+  max-width: 55%;
+  line-height: 1.25;
+}
+
+@media (max-width: 576px) {
+  .training-desc-header {
+    gap: 0.35rem;
+    align-items: flex-start;
+  }
+
+  .training-desc-title {
+    font-size: 0.9rem !important;
+  }
+
+  .training-desc-reservation-hint {
+    font-size: 0.75rem;
+    max-width: 48%;
+    margin-right: 0.5rem;
+    line-height: 1.2;
+    padding-top: 0.2rem;
+  }
+}
+
 /* WodBuster-style training board (light admin theme) */
 .wod-training-description {
   color: #1e293b;
