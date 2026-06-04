@@ -132,7 +132,15 @@ csrf.init_app(app)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '123456790')
 
 # SQLite database (Flask instance folder at project root)
-from .db_path import resolve_database_path, sqlalchemy_sqlite_uri
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+from .db_path import (
+    resolve_database_path,
+    sqlalchemy_sqlite_uri,
+    sqlite_connect_args,
+    apply_sqlite_pragmas,
+)
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['CSRF_ENABLED'] = True
@@ -148,7 +156,15 @@ app_dir = op.realpath(os.path.dirname(__file__))
 database_path = resolve_database_path()
 app.config['DATABASE_FILE'] = database_path
 app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_sqlite_uri(database_path)
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'connect_args': sqlite_connect_args()}
 logging.info('Using database: %s', database_path)
+
+
+@event.listens_for(Engine, 'connect')
+def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+    import sqlite3
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        apply_sqlite_pragmas(dbapi_connection)
 
 def _migrations_root():
     # app_dir is .../wodbooker (package); project root is one level up (migrations/ lives there)

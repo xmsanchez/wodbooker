@@ -25,6 +25,12 @@ alwaysApply: false
 - `POST .../sync-wodbuster-bookings`
 - `POST .../cancel-wodbuster-booking`
 
+## Training descriptions (booking list)
+
+- One Madrid calendar day: today until tomorrow has synced WOD HTML, then tomorrow.
+- Rendered via `training_description_html.py` + `static/training-description.css` (sanitized WodBuster HTML).
+- Row header may show `Tienes reserva hoy/mañana a las HH:MM` when a non-cancelled `WodBusterBooking` on that display day matches the training row title (case-insensitive name match via `_attach_reservation_hints` in `views.py`).
+
 ## Templates
 
 - Custom list/edit under `wodbooker/templates/admin/booking/`

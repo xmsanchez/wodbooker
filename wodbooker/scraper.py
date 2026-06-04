@@ -8,6 +8,7 @@ import sseclient
 import cloudscraper
 import pytz
 from bs4 import BeautifulSoup
+from .training_description_html import extract_board_title
 from .exceptions import LoginError, InvalidWodBusterResponse, \
     BookingNotAvailable, ClassIsFull, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
@@ -622,39 +623,13 @@ class Scraper():
             logging.exception("Unexpected error fetching booked classes for user %s on date %s", self._user, date)
             return []
 
-    @staticmethod
-    def _clean_html(text: str) -> str:
-        """
-        Clean HTML tags from text, preserving line breaks.
-        :param text: HTML text to clean
-        :return: Cleaned text with line breaks preserved
-        """
-        if not text:
-            return ""
-        
-        # Replace <br> and <br/> with newlines
-        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
-        
-        # Replace </p> with newline
-        text = text.replace('</p>', '\n')
-        
-        # Remove all remaining HTML tags
-        text = re.sub(r'<[^<]+?>', '', text)
-        
-        # Clean up multiple newlines
-        text = re.sub(r'\n\s*\n+', '\n\n', text)
-        
-        # Strip leading/trailing whitespace
-        return text.strip()
-
     def get_training_descriptions(self, box_url: str, athlete_id: str, date: datetime.date) -> list:
         """
         Get training descriptions (ClasesDesc) for a specific date.
         :param box_url: The WodBuster box URL (e.g., https://mayantibox.wodbuster.com)
         :param athlete_id: The athlete ID with dashes (e.g., 4bbb52ac-6228-4194-a7e5-eb258c846adf)
         :param date: The date to fetch training descriptions for
-        :return: List of dictionaries with training description information:
-                 [{'training_name': str, 'description': str, 'id_pizarra': int}, ...]
+        :return: List of dicts: training_name, description (HTML from Descripcion), id_pizarra
         :raises LoginError: If user/password combination fails.
         :raises InvalidWodBusterResponse: If the response from WodBuster is not valid
         :raises RequestException: If a network error occurs
@@ -726,84 +701,31 @@ class Scraper():
             # Process each pizarra (training description)
             for idx, pizarra in enumerate(pizarras):
                 id_pizarra = pizarra.get('IdPizarra')
-                description_html = pizarra.get('Descripcion', '')
-                
-                # Clean HTML from description first to extract training name
-                description_clean = self._clean_html(description_html)
-                
-                # Extract training name from description header (first line usually contains "WodMayanti Box", "MinimalMayanti Box", etc.)
-                training_name = None
-                header_line_removed = False
-                if description_clean:
-                    lines = description_clean.split('\n')
-                    first_line = lines[0].strip() if lines else ''
-                    
-                    training_desc_logger.info("Pizarra %d for date %s: First line of description: '%s'", idx, date, first_line[:100])
-                    
-                    # Look for pattern like "WodMayanti Box", "MinimalMayanti Box", "EnduranceMayanti Box"
-                    # Extract the training type (everything before "Mayanti Box" or similar box name)
-                    box_name_patterns = ['Mayanti Box', 'Box', 'CrossFit']
-                    for box_pattern in box_name_patterns:
-                        if box_pattern in first_line:
-                            # Extract everything before the box name
-                            training_name = first_line.split(box_pattern)[0].strip()
-                            training_desc_logger.info("Extracted training name '%s' from pattern '%s' in first line", training_name, box_pattern)
-                            # Remove the header line from description
-                            lines.pop(0)
-                            # Also remove empty line after header if present
-                            if lines and not lines[0].strip():
-                                lines.pop(0)
-                            description_clean = '\n'.join(lines).strip()
-                            header_line_removed = True
-                            break
-                    
-                    # If no box name pattern found, try to extract from first line
-                    # Common patterns: "Wod", "Minimal", "Endurance" at the start
-                    if not training_name and first_line and not header_line_removed:
-                        # Try to match common training types at the start (more comprehensive patterns)
-                        # Pattern order matters - try most specific first
-                        training_type_patterns = [
-                            r'^(Wod|WOD|Minimal|Endurance|Gymnastics|GAP|Open\s*Box|OpenBox)(?=[A-Z])',  # Training type immediately followed by capital letter (like "WodMayanti" - no space)
-                            r'^(Wod|WOD|Minimal|Endurance|Gymnastics|GAP|Open\s*Box|OpenBox)\s+',  # Training type followed by space
-                            r'^(Wod|WOD|Minimal|Endurance|Gymnastics|GAP|Open\s*Box|OpenBox)$',  # Just the training type
-                        ]
-                        for pattern in training_type_patterns:
-                            match = re.match(pattern, first_line, re.IGNORECASE)
-                            if match:
-                                training_name = match.group(1)
-                                training_desc_logger.info("Extracted training name '%s' using regex pattern '%s' from first line '%s'", 
-                                           training_name, pattern, first_line[:100])
-                                # Remove the header line from description
-                                lines.pop(0)
-                                # Also remove empty line after header if present
-                                if lines and not lines[0].strip():
-                                    lines.pop(0)
-                                description_clean = '\n'.join(lines).strip()
-                                header_line_removed = True
-                                break
-                
-                # Fallback to Data mapping, then Nombre from pizarra
-                if not training_name:
-                    training_name = pizarra_to_class_name.get(id_pizarra) or pizarra.get('Nombre', '')
-                    training_desc_logger.info("Using fallback training name '%s' (from Data mapping: %s, from pizarra Nombre: %s)", 
-                                training_name, 
-                                pizarra_to_class_name.get(id_pizarra),
-                                pizarra.get('Nombre', ''))
-                
-                training_desc_logger.info("Final training_name for pizarra %d (IdPizarra: %s): '%s' (extracted from description: %s)", 
-                            idx, id_pizarra, training_name, 'yes' if header_line_removed else 'no')
-                
-                if training_name:  # Only add if we have a training name
+                description_html = (pizarra.get('Descripcion') or '').strip()
+
+                schedule_name = pizarra_to_class_name.get(id_pizarra) or pizarra.get('Nombre', '')
+                training_name = extract_board_title(description_html, schedule_name)
+
+                training_desc_logger.info(
+                    "Final training_name for pizarra %d (IdPizarra: %s): '%s'",
+                    idx, id_pizarra, training_name,
+                )
+
+                if training_name:
                     training_descriptions.append({
                         'training_name': training_name,
-                        'description': description_clean,
-                        'id_pizarra': id_pizarra
+                        'description': description_html,
+                        'id_pizarra': id_pizarra,
                     })
-                    training_desc_logger.info("Added training description: %s (id_pizarra: %s, description length: %d)", 
-                                training_name, id_pizarra, len(description_clean))
+                    training_desc_logger.info(
+                        "Added training description: %s (id_pizarra: %s, description length: %d)",
+                        training_name, id_pizarra, len(description_html),
+                    )
                 else:
-                    training_desc_logger.warning("Skipping pizarra %d for date %s: no training name (IdPizarra: %s)", 
-                                  idx, date, id_pizarra)
+                    training_desc_logger.warning(
+                        "Skipping pizarra %d for date %s: no training name (IdPizarra: %s)",
+                        idx, date, id_pizarra,
+                    )
             
             training_desc_logger.info("Found %d training descriptions for user %s on date %s: %s", 
                         len(training_descriptions), self._user, date, 
