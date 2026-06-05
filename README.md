@@ -9,16 +9,23 @@ This Flask application allows WodBuster users to create booking requests which w
 - Automatically book a class at the desired timeslot.
 - The bookings list is ordered by day and time.
 - If you are in waiting list, as soon as there is a free slot the app will book it for you.
-- Wodbuster bookings can be synced to see at a glance the real bookings. Useful if you did manual bookings in wodbuster.
+- WodBuster bookings can be synced to see your real reservations at a glance; you can also cancel them from the app. Useful if you did manual bookings in WodBuster.
 - Next week classes can be viewed in advance. Useful to book special classes in advance, if your box has a lot of rotation (minimal, endurance, gap, hyrox, and so on).
+- Today's and tomorrow's WOD board on the home screen, with a hint when you already have a reservation.
+- Attendance dashboard and history chart (monthly quota, no-shows, year-over-year trends).
+- Optional cancel-window settings to avoid auto-booking inside your box's late-cancel penalization window (Preferencias).
 - (Optional) Receive email notifications on successful / failed bookings.
-- (Optional) Receive push notifications before each class (15m, 30m, 60m before).
+- (Optional) Receive push notifications before each class (15m, 30m, 60m before) and on booking success/failure.
 
 ## Screenshots
 
 | Homescreen | Current week bookings | Next week classes |
 | :---: | :---: | :---: |
-| [<img src="images/wb_homescreen_thumb.png" alt="Image 1" height="150" />](images/wb_homescreen.png) | [<img src="images/wb_current_week_thumb.png" alt="Image 2" height="150" />](images/wb_current_week.png) | [<img src="images/wb_next_week_thumb.png" alt="Image 3" height="150" />](images/wb_next_week.png) |
+| [<img src="images/wb_homescreen_thumb.png" alt="Homescreen" height="150" />](images/wb_homescreen.png) | [<img src="images/wb_current_week_thumb.png" alt="Current week bookings" height="150" />](images/wb_current_week.png) | [<img src="images/wb_next_week_thumb.png" alt="Next week classes" height="150" />](images/wb_next_week.png) |
+
+| Training reminders | Wod description | Attendance statistics |
+| :---: | :---: | :---: |
+| [<img src="images/wb_training_desc_header_thumb.png" alt="Training descriptions section" height="150" />](images/wb_training_desc_header.png) | [<img src="images/wb_training_desc_thumb.png" alt="Wod description" height="150" />](images/wb_training_desc.png) | [<img src="images/wb_attendance_stats_thumb.png" alt="Attendance statistics" height="150" />](images/wb_attendance_stats.png) |
 
 
 ## How to use
@@ -90,7 +97,7 @@ To access from outside your local network you'll need to open two ports:
 - Open the 443 port in your router and forward it to `127.0.0.1:443`.
 - Open the 80 port in your router and forward it to `127.0.0.1:80`. This will be used for letsencrypt to renew the certificate (optional but highly recommended).
 
-For the letsencrypt configuration see the last section of this README.
+For the letsencrypt configuration see the SSL certificate section below.
 
 ## SSL certificate for nginx
 
@@ -116,11 +123,11 @@ Add this line:
 
 ## Push Notifications
 
-Push notifications are implemented to remind users before their booked classes. Users can enable push notifications and choose to receive reminders at 1 hour, 30 minutes, and/or 15 minutes before a class.
+Push notifications are implemented to remind users before their booked classes. Users can enable push notifications and choose to receive reminders at 1 hour, 30 minutes, and/or 15 minutes before a class. Push can also notify you when an auto-book attempt succeeds or fails (separate toggles in Preferencias).
 
 The push notifications will automatically be sent based on the user's preferences and their confirmed, non-cancelled bookings.
 
-:important: The users must enable push notifications through the "Preferencias" menu.
+**Important:** The users must enable push notifications through the "Preferencias" menu.
 
 ### Technical setup for push notifications
 
@@ -160,26 +167,4 @@ After setting the environment variables, restart the application for the changes
 
 ```bash
 docker compose up -d --build
-```
-
-## SSL certificate for nginx
-
-The first time we run wodbooker nginx container we need to run this:
-
-```bash
-/usr/bin/docker exec -ti nginx-wodbooker certbot --nginx -d wodbooker.yourdomain.com
-```
-
-The above command will deploy the letsencrypt certificate for the first time.
-
-From then on, the certificate only needs to be renewed every three months. This can be automated in crontab:
-
-```bash
-crontab -e
-```
-
-Add this line:
-
-```bash
-0 0 * * * /usr/bin/docker exec -ti nginx-wodbooker certbot renew --quiet
 ```
