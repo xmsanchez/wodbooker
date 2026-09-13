@@ -429,10 +429,16 @@ def _build_calendar_block(stats: MonthStats) -> dict:
 def _build_billing_block(billing: BillingPeriodStats) -> dict:
     period_str = format_period_range(billing.period_from, billing.period_to)
     tariff = billing.tariff_name or 'tarifa'
-    credits_line = (
-        f'Créditos del periodo ({tariff}): '
-        f'{billing.quota_used}/{billing.quota_total} usados'
-    )
+    if billing.quota_total and billing.quota_total > 0:
+        credits_line = (
+            f'Créditos del periodo ({tariff}): '
+            f'{billing.quota_used}/{billing.quota_total} usados'
+        )
+    else:
+        credits_line = (
+            f'Créditos del periodo ({tariff}): '
+            f'{billing.quota_used} usados (ilimitada)'
+        )
     if period_str:
         credits_line += f' · {period_str}'
     block = {
@@ -477,8 +483,9 @@ def get_attendance_dashboard(user: User) -> Optional[dict]:
         cancelled=current_row.cancelled or 0,
     )
     billing = None
-    if current_row.quota_total:
-        usage = (current_row.quota_used or 0) / current_row.quota_total
+    if current_row.quota_total is not None or current_row.tariff_name or current_row.period_from:
+        effective_quota = current_row.quota_total if (current_row.quota_total and current_row.quota_total > 0) else 16
+        usage = (current_row.quota_used or 0) / effective_quota
         billing = BillingPeriodStats(
             period_from=current_row.period_from,
             period_to=current_row.period_to,
@@ -490,9 +497,13 @@ def get_attendance_dashboard(user: User) -> Optional[dict]:
         )
 
     quota_mood = compute_quota_mood(
-        billing.usage_pct if billing else 0,
-        billing.quota_used if billing else 0,
-        billing.quota_total if billing else 0,
+        quota_used=current_row.quota_used or cal_stats.booked or 0,
+        quota_total=current_row.quota_total,
+        attended=cal_stats.attended,
+        booked=cal_stats.booked,
+        period_from=current_row.period_from,
+        period_to=current_row.period_to,
+        today=today,
     )
 
     monthly_for_yoy = [
@@ -526,7 +537,7 @@ def get_attendance_dashboard(user: User) -> Optional[dict]:
             'usage_pct': round(quota_mood.usage_pct * 100, 1),
             'quota_used': quota_mood.quota_used,
             'quota_total': quota_mood.quota_total,
-            'subtitle': 'Según créditos del periodo de facturación, no clases reservadas',
+            'subtitle': quota_mood.subtitle or 'Según créditos del periodo de facturación, no clases reservadas',
         },
         'yoy_mood': {
             'message': yoy.message,
