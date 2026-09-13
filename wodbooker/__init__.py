@@ -692,36 +692,26 @@ def weekly_classes():
             flash("No se encontró URL del box. Por favor, crea una reserva primero.", "error")
             return redirect(url_for('booking.index_view'))
         
-        # Calculate start date for the week to show
+        # Calculate start dates for two weeks:
+        # On weekends (Saturday/Sunday), week 1 starts next Monday (1 or 2 days ahead),
+        # and week 2 is the following week (where bookings open on Saturday).
+        # On Monday through Friday, week 1 starts this week's Monday, and week 2 starts next Monday.
         today = datetime.now().date()
-        days_until_monday = (7 - today.weekday()) % 7
-        start_date = today + timedelta(days=days_until_monday if days_until_monday > 0 else 0)
+        if today.weekday() >= 5:  # Saturday or Sunday
+            start_date_week1 = today + timedelta(days=(7 - today.weekday()) % 7)
+        else:  # Monday through Friday
+            start_date_week1 = today - timedelta(days=today.weekday())
 
-        # Check if we should instead show the week after the next one
-        now = datetime.now(_MADRID_TZ)
-        user_bookings = db.session.query(Booking).filter_by(user_id=user.id).all()
-        
-        should_show_next_week = False
-        for booking in user_bookings:
-            next_week_class_date = _get_next_date_for_weekday(start_date, booking.dow)
-            booking_opens_date = next_week_class_date - timedelta(days=booking.offset)
-            if booking.available_at:
-                booking_opens_datetime = _MADRID_TZ.localize(
-                    datetime.combine(booking_opens_date, booking.available_at)
-                )
-                if now >= booking_opens_datetime:
-                    should_show_next_week = True
-                    break
-        
-        if should_show_next_week:
-            start_date = start_date + timedelta(days=7)
-        
-        # Get scraper and fetch week classes
+        start_date_week2 = start_date_week1 + timedelta(days=7)
+        end_date_week1 = start_date_week1 + timedelta(days=6)
+        end_date_week2 = start_date_week2 + timedelta(days=6)
+
+        # Get scraper and fetch 14 days of classes (2 weeks)
         scraper = get_scraper(user.email, user.cookie)
         athlete_id = user.athlete_id if user.athlete_id else None
-        
-        week_classes = scraper.get_week_classes(box_url, start_date, athlete_id)
-        
+
+        week_classes = scraper.get_week_classes(box_url, start_date_week1, athlete_id, days=14)
+
         # Map class type IDs to colors (use NombreE from JSON for the name)
         class_color_map_by_id = {
             1: '#059669',  # green - Wod
@@ -732,13 +722,13 @@ def weekly_classes():
             14: '#64748b',  # gray - Adapted Training
             17: '#eab308',  # yellow - Minimal
         }
-        
+
         # Map class names to colors (takes precedence over ID mapping)
         class_color_map_by_name = {
             'GAP': '#ec4899',  # pink
             'ENDURANCE': '#0ea5e9',  # light blue
         }
-        
+
         # Process classes for template
         processed_classes = {}
         for date, classes in week_classes.items():
@@ -763,13 +753,27 @@ def weekly_classes():
                 })
             # Sort classes by time
             processed_classes[date].sort(key=lambda x: x['time'])
-        
-        end_date = start_date + timedelta(days=6)
-        
+
+        weeks = [
+            {
+                'title': f'Semana del {start_date_week1.strftime("%d/%m/%Y")} al {end_date_week1.strftime("%d/%m/%Y")}',
+                'start_date': start_date_week1,
+                'end_date': end_date_week1,
+                'dates': [start_date_week1 + timedelta(days=i) for i in range(7)],
+            },
+            {
+                'title': f'Semana del {start_date_week2.strftime("%d/%m/%Y")} al {end_date_week2.strftime("%d/%m/%Y")}',
+                'start_date': start_date_week2,
+                'end_date': end_date_week2,
+                'dates': [start_date_week2 + timedelta(days=i) for i in range(7)],
+            },
+        ]
+
         return render_template('weekly_classes.html', 
+                             weeks=weeks,
                              week_classes=processed_classes,
-                             start_date=start_date,
-                             end_date=end_date,
+                             start_date=start_date_week1,
+                             end_date=end_date_week2,
                              DAYS_OF_WEEK=DAYS_OF_WEEK,
                              box_url=box_url)
     

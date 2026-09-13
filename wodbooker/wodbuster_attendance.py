@@ -83,6 +83,7 @@ class QuotaMood:
     usage_pct: float
     quota_used: int
     quota_total: int
+    subtitle: Optional[str] = None
 
 
 @dataclass
@@ -479,12 +480,67 @@ def quota_mood_from_usage(usage_pct: float) -> str:
     return _QUOTA_MOOD_TIERS[-1][1]
 
 
-def compute_quota_mood(usage_pct: float, quota_used: int, quota_total: int) -> QuotaMood:
+def compute_quota_mood(
+    usage_pct: Optional[float] = None,
+    quota_used: int = 0,
+    quota_total: Optional[int] = None,
+    *,
+    attended: Optional[int] = None,
+    booked: Optional[int] = None,
+    period_from: Optional[datetime.date] = None,
+    period_to: Optional[datetime.date] = None,
+    today: Optional[datetime.date] = None,
+) -> QuotaMood:
+    if today is None:
+        today = datetime.date.today()
+
+    is_unlimited = quota_total is None or quota_total <= 0
+    effective_quota = 16 if is_unlimited else quota_total
+
+    attended_count = attended if attended is not None else quota_used
+    booked_count = booked if booked is not None else quota_used
+
+    start_date = period_from or datetime.date(today.year, today.month, 1)
+    if period_to is not None:
+        end_date = period_to
+    else:
+        if today.month == 12:
+            end_date = datetime.date(today.year, 12, 31)
+        else:
+            end_date = datetime.date(today.year, today.month + 1, 1) - datetime.timedelta(days=1)
+
+    total_days = max(1, (end_date - start_date).days + 1)
+    days_elapsed = max(1, min(total_days, (today - start_date).days + 1))
+    current_week = min(4, max(1, (days_elapsed - 1) // 7 + 1))
+
+    expected_to_date = (days_elapsed / total_days) * effective_quota
+
+    if attended_count >= effective_quota:
+        pace = max(1.0, attended_count / effective_quota)
+    elif attended_count == 0:
+        if days_elapsed <= 3 and booked_count > 0:
+            pace = min(0.60, booked_count / max(0.5, expected_to_date))
+        elif usage_pct is not None and usage_pct > 0 and period_from is None and today is None:
+            pace = usage_pct
+        else:
+            pace = 0.0
+    else:
+        pace = attended_count / max(0.5, expected_to_date)
+
+    label = quota_mood_from_usage(pace)
+    pace_pct = int(round(pace * 100))
+    if is_unlimited:
+        quota_display = f"{attended_count} asistidas (ilimitada)"
+    else:
+        quota_display = f"{attended_count} asistidas de {effective_quota}"
+    subtitle = f"Semana {current_week} · Ritmo: {pace_pct}% ({quota_display})"
+
     return QuotaMood(
-        label=quota_mood_from_usage(usage_pct),
-        usage_pct=usage_pct,
-        quota_used=quota_used,
-        quota_total=quota_total,
+        label=label,
+        usage_pct=round(pace, 3),
+        quota_used=attended_count,
+        quota_total=quota_total if quota_total is not None else 0,
+        subtitle=subtitle,
     )
 
 

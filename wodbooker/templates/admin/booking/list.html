@@ -1,473 +1,511 @@
 {% extends 'admin/model/list.html' %}
 {% block head %}
-  {{ super() }}
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 {% endblock %}
 {% block model_menu_bar %}
-  {% set error_ns = namespace(error=False) %}
-  {% for row in data %}
-    {% if row['is_active'] and not row['is_thread_active'] %}
-      {% set error_ns.error = True %}
+{% set error_ns = namespace(error=False) %}
+{% for row in data %}
+{% if row['is_active'] and not row['is_thread_active'] %}
+{% set error_ns.error = True %}
+{% endif %}
+{% endfor %}
+{% if error_ns.error %}
+<div class="alert alert-warning" role="alert">
+  <h3>Debes revisar tus reservas</h3>
+  <p>Las reservas marcadas con el símbolo <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i> están
+    desactivadas porque se produjo algún error con las mismas. Para que vuelvan a estar activas, revisa el estado de las
+    mismas y corrige los errores. Si el problema es derivado de que la sesión caducó, simplemente desactiva la reserva y
+    vuelve a activarla.</p>
+</div>
+{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex align-items-center">
+    {% if current_user.profile_picture_url %}
+    <img src="{{ current_user.profile_picture_url }}" alt="Profile"
+      style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+    {% else %}
+    <i class="bi bi-person-circle" style="font-size: 48px; color: #64748b;"></i>
     {% endif %}
-  {% endfor %}
-  {% if error_ns.error %}
-    <div class="alert alert-warning" role="alert">
-      <h3>Debes revisar tus reservas</h3>
-      <p>Las reservas marcadas con el símbolo <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i> están desactivadas porque se produjo algún error con las mismas. Para que vuelvan a estar activas, revisa el estado de las mismas y corrige los errores. Si el problema es derivado de que la sesión caducó, simplemente desactiva la reserva y vuelve a activarla.</p>
-    </div>
-  {% endif %}
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="d-flex align-items-center">
-      {% if current_user.profile_picture_url %}
-        <img src="{{ current_user.profile_picture_url }}" alt="Profile" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+  </div>
+  <div class="d-flex gap-2">
+    {% if current_user.athlete_id %}
+    <form id="syncWodBusterForm" method="POST" action="{{ url_for('booking.sync_wodbuster_bookings_endpoint') }}"
+      style="display: inline;">
+      {% if csrf_token %}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      {% endif %}
+      <button type="submit" id="syncWodBusterBtn" class="btn btn-outline-secondary btn-sm"
+        title="Sincronizar reservas de WodBuster">
+        <i class="bi bi-arrow-clockwise"></i> Sync WodBuster
+      </button>
+    </form>
+    {% endif %}
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('weekly_classes') }}" role="button"
+      title="Ver horarios de clases">
+      <i class="bi bi-calendar-week"></i> Horarios de clase
+    </a>
+    <a class="btn btn-primary d-none d-md-inline-block" href="{{ get_url('.create_view', url=return_url, modal=True) }}"
+      role="button">
+      <i class="bi bi-plus-square-fill"></i> Nueva Reserva
+    </a>
+    <a class="btn btn-primary d-inline-flex d-md-none align-items-center justify-content-center new-booking-mobile-btn"
+      href="{{ get_url('.create_view', url=return_url, modal=True) }}" role="button" title="Nueva reserva"
+      aria-label="Nueva reserva">
+      <i class="bi bi-plus-lg" aria-hidden="true"></i>
+    </a>
+  </div>
+</div>
+{% if current_user.athlete_id and attendance_dashboard %}
+<div class="card mb-3" id="attendanceSummaryCard">
+  <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;"
+    data-toggle="collapse" data-target="#attendanceSummaryBody" aria-expanded="false"
+    aria-controls="attendanceSummaryBody" title="{{ attendance_dashboard.quota_mood.subtitle or '' }}">
+    <span id="attendanceQuotaLabel">{{ attendance_dashboard.quota_mood.label }}</span>
+    <i class="bi bi-chevron-down"></i>
+  </div>
+  <div id="attendanceSummaryBody" class="collapse">
+    <div class="card-body">
+      {% if attendance_dashboard.stale_message %}
+      <p class="text-warning small mb-2" id="attendanceStaleMsg">{{ attendance_dashboard.stale_message }}</p>
+      {% endif %}
+      {% if attendance_dashboard.needs_sync %}
+      <p class="mb-2" id="attendanceSummaryLine">{{ attendance_dashboard.calendar_month.summary_line }}</p>
       {% else %}
-        <i class="bi bi-person-circle" style="font-size: 48px; color: #64748b;"></i>
+      <p class="mb-2 font-weight-bold" id="attendanceCalendarSummary">{{
+        attendance_dashboard.calendar_month.summary_line }}</p>
+      {% if attendance_dashboard.calendar_month.no_show_line %}
+      <p class="mb-1" id="attendancePerdidaLine">{{ attendance_dashboard.calendar_month.no_show_line }}</p>
       {% endif %}
-    </div>
-    <div class="d-flex gap-2">
-      {% if current_user.athlete_id %}
-        <form id="syncWodBusterForm" method="POST" action="{{ url_for('booking.sync_wodbuster_bookings_endpoint') }}" style="display: inline;">
-          {% if csrf_token %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-          {% endif %}
-          <button type="submit" id="syncWodBusterBtn" class="btn btn-outline-secondary btn-sm" title="Sincronizar reservas de WodBuster">
-            <i class="bi bi-arrow-clockwise"></i> Sync WodBuster
-          </button>
-        </form>
+      {% if attendance_dashboard.calendar_month.cancelled_line %}
+      <p class="mb-1" id="attendanceCalendarCancelled">{{ attendance_dashboard.calendar_month.cancelled_line }}</p>
       {% endif %}
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('weekly_classes') }}" role="button" title="Ver clases de la próxima semana">
-        <i class="bi bi-calendar-week"></i> Clases próxima semana
-      </a>
-      <a
-        class="btn btn-primary d-none d-md-inline-block"
-        href="{{ get_url('.create_view', url=return_url, modal=True) }}"
-        role="button"
-      >
-        <i class="bi bi-plus-square-fill"></i> Nueva Reserva
-      </a>
-      <a
-        class="btn btn-primary d-inline-flex d-md-none align-items-center justify-content-center new-booking-mobile-btn"
-        href="{{ get_url('.create_view', url=return_url, modal=True) }}"
-        role="button"
-        title="Nueva reserva"
-        aria-label="Nueva reserva"
-      >
-        <i class="bi bi-plus-lg" aria-hidden="true"></i>
-      </a>
-    </div>
-  </div>
-  {% if current_user.athlete_id and attendance_dashboard %}
-  <div class="card mb-3" id="attendanceSummaryCard">
-    <div class="card-header d-flex justify-content-between align-items-center"
-         style="cursor: pointer;"
-         data-toggle="collapse" data-target="#attendanceSummaryBody"
-         aria-expanded="false" aria-controls="attendanceSummaryBody"
-         title="{{ attendance_dashboard.quota_mood.subtitle or '' }}">
-      <span id="attendanceQuotaLabel">{{ attendance_dashboard.quota_mood.label }}</span>
-      <i class="bi bi-chevron-down"></i>
-    </div>
-    <div id="attendanceSummaryBody" class="collapse">
-      <div class="card-body">
-        {% if attendance_dashboard.stale_message %}
-        <p class="text-warning small mb-2" id="attendanceStaleMsg">{{ attendance_dashboard.stale_message }}</p>
-        {% endif %}
-        {% if attendance_dashboard.needs_sync %}
-        <p class="mb-2" id="attendanceSummaryLine">{{ attendance_dashboard.calendar_month.summary_line }}</p>
-        {% else %}
-        <p class="mb-2 font-weight-bold" id="attendanceCalendarSummary">{{ attendance_dashboard.calendar_month.summary_line }}</p>
-        {% if attendance_dashboard.calendar_month.no_show_line %}
-        <p class="mb-1" id="attendancePerdidaLine">{{ attendance_dashboard.calendar_month.no_show_line }}</p>
-        {% endif %}
-        {% if attendance_dashboard.calendar_month.cancelled_line %}
-        <p class="mb-1" id="attendanceCalendarCancelled">{{ attendance_dashboard.calendar_month.cancelled_line }}</p>
-        {% endif %}
-        {% if attendance_dashboard.billing_period %}
-        <hr class="my-2">
-        <p class="mb-1 text-muted small" id="attendanceCreditsLine">{{ attendance_dashboard.billing_period.credits_line }}</p>
-        {% if attendance_dashboard.billing_period.cancelled_line %}
-        <p class="mb-1 text-muted small" id="attendanceBorradaLine">{{ attendance_dashboard.billing_period.cancelled_line }}</p>
-        {% endif %}
-        {% endif %}
-        {% endif %}
-        {% if attendance_dashboard.yoy_mood.message %}
-        <p class="mb-1 mt-2" id="attendanceYoyMessage">{{ attendance_dashboard.yoy_mood.message }}</p>
-        <p class="text-muted small mb-2" id="attendanceYoyDetail">{{ attendance_dashboard.yoy_mood.detail }}</p>
-        {% endif %}
-        <div class="d-flex flex-wrap gap-2">
-          <a href="{{ url_for('attendance_history_page') }}" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-graph-up"></i> Ver historial
-          </a>
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="attendanceBackfillBtn">
-            <i class="bi bi-cloud-download"></i> Completar historial
-          </button>
-        </div>
-        <p class="text-muted small mt-2 mb-0" id="attendanceBackfillStatus"></p>
+      {% if attendance_dashboard.billing_period %}
+      <hr class="my-2">
+      <p class="mb-1 text-muted small" id="attendanceCreditsLine">{{ attendance_dashboard.billing_period.credits_line }}
+      </p>
+      {% if attendance_dashboard.billing_period.cancelled_line %}
+      <p class="mb-1 text-muted small" id="attendanceBorradaLine">{{ attendance_dashboard.billing_period.cancelled_line
+        }}</p>
+      {% endif %}
+      {% endif %}
+      {% endif %}
+      {% if attendance_dashboard.yoy_mood.message %}
+      <p class="mb-1 mt-2" id="attendanceYoyMessage">{{ attendance_dashboard.yoy_mood.message }}</p>
+      <p class="text-muted small mb-2" id="attendanceYoyDetail">{{ attendance_dashboard.yoy_mood.detail }}</p>
+      {% endif %}
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('attendance_history_page') }}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-graph-up"></i> Ver historial
+        </a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="attendanceBackfillBtn">
+          <i class="bi bi-cloud-download"></i> Completar historial
+        </button>
       </div>
+      <p class="text-muted small mt-2 mb-0" id="attendanceBackfillStatus"></p>
     </div>
   </div>
-  {% endif %}
-  {% if training_display_date and training_descriptions is defined %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='training-description.css') }}">
-    <div class="mt-3 mb-3">
-      <div class="accordion" id="trainingDescriptionsAccordion">
-        {% set desc_dow = training_display_date.weekday() %}
-        <div class="weekday-header" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #fcd34d; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; font-weight: 600; color: #92400e; font-size: 1rem;">
-          <span>Entrenos del día - {{ DAYS_OF_WEEK[desc_dow] }} {{ training_display_date.strftime('%d/%m/%Y') }}</span>
-        </div>
-        {% for desc in training_descriptions %}
-          {% set has_description = desc.formatted_description %}
-          {% set desc_id = desc.id if desc.id is defined and desc.id else ('temp_' + loop.index0|string) %}
-          <div class="card" style="margin-bottom: {% if loop.index0 > 0 %}0.25rem{% else %}0.5rem{% endif %}; border-left: 4px solid #f59e0b;">
-            <div class="card-header" id="headingTD{{desc_id}}" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
-              <h2 class="mb-0" style="margin-bottom: 0; width: 100%;">
-                {% if has_description %}
-                  <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseTD{{desc_id}}" aria-expanded="false" aria-controls="collapseTD{{desc_id}}" style="padding: 0; text-decoration: none; width: 100%; text-align: left;">
-                    <div class="training-desc-header">
-                      <h4 class="training-desc-title" style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600; color: #92400e; text-align: left;">
-                        {{ desc.display_title or desc.training_name }}
-                      </h4>
-                      {% if desc.reservation_hint %}
-                        <span class="training-desc-reservation-hint">{{ desc.reservation_hint }}</span>
-                      {% endif %}
-                    </div>
-                  </button>
-                {% else %}
-                  <div class="training-desc-header">
-                    <h4 class="training-desc-title" style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600; color: #92400e; text-align: left;">
-                      {{ desc.display_title or desc.training_name }} - Aún no hay el entreno disponible
-                    </h4>
-                    {% if desc.reservation_hint %}
-                      <span class="training-desc-reservation-hint">{{ desc.reservation_hint }}</span>
-                    {% endif %}
-                  </div>
-                {% endif %}
-              </h2>
+</div>
+{% endif %}
+{% if training_display_date and training_descriptions is defined %}
+<link rel="stylesheet" href="{{ url_for('static', filename='training-description.css') }}">
+<div class="mt-3 mb-3">
+  <div class="accordion" id="trainingDescriptionsAccordion">
+    {% set desc_dow = training_display_date.weekday() %}
+    <div class="weekday-header"
+      style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #fcd34d; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; font-weight: 600; color: #92400e; font-size: 1rem;">
+      <span>Entrenos del día - {{ DAYS_OF_WEEK[desc_dow] }} {{ training_display_date.strftime('%d/%m/%Y') }}</span>
+    </div>
+    {% for desc in training_descriptions %}
+    {% set has_description = desc.formatted_description %}
+    {% set desc_id = desc.id if desc.id is defined and desc.id else ('temp_' + loop.index0|string) %}
+    <div class="card"
+      style="margin-bottom: {% if loop.index0 > 0 %}0.25rem{% else %}0.5rem{% endif %}; border-left: 4px solid #f59e0b;">
+      <div class="card-header" id="headingTD{{desc_id}}"
+        style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+        <h2 class="mb-0" style="margin-bottom: 0; width: 100%;">
+          {% if has_description %}
+          <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse"
+            data-target="#collapseTD{{desc_id}}" aria-expanded="false" aria-controls="collapseTD{{desc_id}}"
+            style="padding: 0; text-decoration: none; width: 100%; text-align: left;">
+            <div class="training-desc-header">
+              <h4 class="training-desc-title"
+                style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600; color: #92400e; text-align: left;">
+                {{ desc.display_title or desc.training_name }}
+              </h4>
+              {% if desc.reservation_hint %}
+              <span class="training-desc-reservation-hint">{{ desc.reservation_hint }}</span>
+              {% endif %}
             </div>
-            {% if has_description %}
-              <div id="collapseTD{{desc_id}}" class="collapse" aria-labelledby="headingTD{{desc_id}}" data-parent="#trainingDescriptionsAccordion">
-                <div class="card-body" style="padding: 0.75rem 1rem;">
-                  <div class="wod-training-description">
-                    {{ desc.formatted_description|safe }}
-                  </div>
-                </div>
-              </div>
+          </button>
+          {% else %}
+          <div class="training-desc-header">
+            <h4 class="training-desc-title"
+              style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600; color: #92400e; text-align: left;">
+              {{ desc.display_title or desc.training_name }} - Aún no hay el entreno disponible
+            </h4>
+            {% if desc.reservation_hint %}
+            <span class="training-desc-reservation-hint">{{ desc.reservation_hint }}</span>
             {% endif %}
           </div>
-        {% endfor %}
+          {% endif %}
+        </h2>
       </div>
+      {% if has_description %}
+      <div id="collapseTD{{desc_id}}" class="collapse" aria-labelledby="headingTD{{desc_id}}"
+        data-parent="#trainingDescriptionsAccordion">
+        <div class="card-body" style="padding: 0.75rem 1rem;">
+          <div class="wod-training-description">
+            {{ desc.formatted_description|safe }}
+          </div>
+        </div>
+      </div>
+      {% endif %}
     </div>
-  {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 {% block model_list_table %}
-  {% if not data %}
-    <div class="alert alert-info" role="alert">
-        <i class="bi bi-info-square"></i> Aún no tienes reservas creadas. Crea tu primera reserva <a href="{{ get_url('.create_view', url=return_url, modal=True) }}">aquí</a>.
-    </div>
-  {% else %}
-    <div class="accordion" id="bookingsAccordion">
-      {% set weekday_ns = namespace(current=None) %}
-      {% for row in data %}
-        {% set row_weekday_dow = row.dow %}
-        {% if weekday_ns.current != row_weekday_dow %}
-          {% set weekday_ns.current = row_weekday_dow %}
-          {% set stats = weekday_stats.get(row_weekday_dow) or {'successful': 0, 'waiting': 0, 'errors': 0} %}
-          <div class="weekday-header" style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #475569; font-size: 1rem;">
-            <span>{{ DAYS_OF_WEEK[row_weekday_dow] }}</span>
-            {% if stats['successful'] > 0 or stats['waiting'] > 0 or stats['errors'] > 0 %}
-              <span style="font-size: 0.875rem; font-weight: 400; margin-left: 0.75rem;">
-                {% if stats['successful'] > 0 %}
-                  <span style="color: #059669;">Reservadas {{ stats['successful'] }}</span>
-                {% endif %}
-                {% if stats['waiting'] > 0 %}
-                  {% if stats['successful'] > 0 %} / {% endif %}
-                  <span style="color: #f59e0b;">Clase llena {{ stats['waiting'] }}</span>
-                {% endif %}
-                {% if stats['errors'] > 0 %}
-                  {% if stats['successful'] > 0 or stats['waiting'] > 0 %} / {% endif %}
-                  <span style="color: #dc2626;">Errores {{ stats['errors'] }}</span>
-                {% endif %}
-              </span>
+{% if not data %}
+<div class="alert alert-info" role="alert">
+  <i class="bi bi-info-square"></i> Aún no tienes reservas creadas. Crea tu primera reserva <a
+    href="{{ get_url('.create_view', url=return_url, modal=True) }}">aquí</a>.
+</div>
+{% else %}
+<div class="accordion" id="bookingsAccordion">
+  {% set weekday_ns = namespace(current=None) %}
+  {% for row in data %}
+  {% set row_weekday_dow = row.dow %}
+  {% if weekday_ns.current != row_weekday_dow %}
+  {% set weekday_ns.current = row_weekday_dow %}
+  {% set stats = weekday_stats.get(row_weekday_dow) or {'successful': 0, 'waiting': 0, 'errors': 0} %}
+  <div class="weekday-header"
+    style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #475569; font-size: 1rem;">
+    <span>{{ DAYS_OF_WEEK[row_weekday_dow] }}</span>
+    {% if stats['successful'] > 0 or stats['waiting'] > 0 or stats['errors'] > 0 %}
+    <span style="font-size: 0.875rem; font-weight: 400; margin-left: 0.75rem;">
+      {% if stats['successful'] > 0 %}
+      <span style="color: #059669;">Reservadas {{ stats['successful'] }}</span>
+      {% endif %}
+      {% if stats['waiting'] > 0 %}
+      {% if stats['successful'] > 0 %} / {% endif %}
+      <span style="color: #f59e0b;">Clase llena {{ stats['waiting'] }}</span>
+      {% endif %}
+      {% if stats['errors'] > 0 %}
+      {% if stats['successful'] > 0 or stats['waiting'] > 0 %} / {% endif %}
+      <span style="color: #dc2626;">Errores {{ stats['errors'] }}</span>
+      {% endif %}
+    </span>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% set is_same_weekday_as_prev = loop.index0 > 0 and data[loop.index0 - 1].dow == row_weekday_dow %}
+  <div class="card" style="margin-bottom: {% if is_same_weekday_as_prev %}0.25rem{% else %}0.5rem{% endif %};">
+    <div class="card-header d-flex justify-content-between" id="heading{{row['id']}}" style="padding: 0.5rem 1rem;">
+      <h2 class="mb-0 mr-auto" style="margin-bottom: 0;">
+        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse"
+          data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}"
+          style="padding: 0; text-decoration: none;">
+          <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">{{ get_value(row, 'time') }}
+            {% if row['is_active'] and not row['is_thread_active'] %}
+            <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
             {% endif %}
-          </div>
-        {% endif %}
-        {% set is_same_weekday_as_prev = loop.index0 > 0 and data[loop.index0 - 1].dow == row_weekday_dow %}
-        <div class="card" style="margin-bottom: {% if is_same_weekday_as_prev %}0.25rem{% else %}0.5rem{% endif %};">
-          <div class="card-header d-flex justify-content-between" id="heading{{row['id']}}" style="padding: 0.5rem 1rem;">
-            <h2 class="mb-0 mr-auto" style="margin-bottom: 0;">
-              <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}" style="padding: 0; text-decoration: none;">
-                  <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">{{ get_value(row, 'time') }}
-                    {% if row['is_active'] and not row['is_thread_active'] %}
-                      <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
-                    {% endif %}
-                  </h4>
-                <p style="margin-bottom: 0; font-size: 0.875rem; color: #64748b;">Apertura reserva: {{ get_value(row, 'available_at') }}</p>
-              </button>
-            </h2>
-            {{ list_row_actions[2].render_ctx(get_pk_value(row), row) }}
-            {{ list_row_actions[0].render_ctx(get_pk_value(row), row) }}
-            {{ list_row_actions[1].render_ctx(get_pk_value(row), row) }}
-          </div>
-    
-          <div id="collapse{{row['id']}}" class="collapse" aria-labelledby="heading{{row['id']}}" data-parent="#bookingsAccordion">
-            <div class="card-body" style="padding: 0.75rem 1rem;">
-              <div class="container-fluid" style="padding: 0;">
-                <p style="margin-bottom: 0.5rem;">
-                  <b>Box</b><br/>
-                  <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ get_value(row, 'url') }}" target="_blank">{{ get_value(row, 'url') }}</a> 
-                </p>
-                <p style="margin-bottom: 0.5rem;">
-                  <b>Activo</b><br/>
-                  {{ "Sí" if row["is_active"] else "No" }}
-                </p>
-                <p style="margin-bottom: 0.5rem;">
-                  <b>Apertura de reservas</b><br/>
-                  {{ get_value(row, 'offset') }} a las {{ get_value(row, 'available_at') }}
-                </p>  
-                <p style="margin-bottom: 0.5rem;">
-                  <b>Última reserva realizada</b><br/>
-                  {% if row['last_book_date'] %}
-                    {{ get_value(row, 'last_book_date') }}
-                  {% else %}
-                    <i>Ninguna</i>
-                  {% endif %}
-                </p>  
-                <p style="margin-bottom: 0.5rem;">
-                  <b>Estado</b><br/>
-                  {% if row['last_events'] %}
-                    {{ row['last_events'][0]['date'].strftime('%d/%m/%Y %H:%M') }}: 
-                    {% for event in row['last_events'] %}
-                      {{ event['event'].rstrip(".") }}.
-                    {% endfor %}
-                    <br /><a href="/event/?search=%3D{{row['id']}}">Ver todos <i class="bi bi-arrow-up-right"></i></a>
-                  {% else %}
-                    <i>Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí cuando la reserva esté activa según vayan ocurriendo.</i>
-                  {% endif %}
-                </p>
-                <p style="margin-bottom: 0.5rem;">
-                  <b>Tipo de clase</b><br/>
-                  {% if row['type_class'] %}
-                    {% if row['type_class'] == 1 %}
-                      OpenBox
-                    {% else %}
-                      Wod
-                    {% endif %}
-                  {% endif %}
-                </p>
-                <p style="margin-bottom: 0;">
-                  <b>Forzar reserva aunque esté fuera de ventana de autoreserva</b><br/>
-                  {{ "Sí" if row['book_despite_cancel_window'] else "No" }}
-                </p>
-              </div>
+          </h4>
+          <p style="margin-bottom: 0; font-size: 0.875rem; color: #64748b;">Apertura reserva: {{ get_value(row,
+            'available_at') }}</p>
+        </button>
+      </h2>
+      {{ list_row_actions[2].render_ctx(get_pk_value(row), row) }}
+      {{ list_row_actions[0].render_ctx(get_pk_value(row), row) }}
+      {{ list_row_actions[1].render_ctx(get_pk_value(row), row) }}
+    </div>
+
+    <div id="collapse{{row['id']}}" class="collapse" aria-labelledby="heading{{row['id']}}"
+      data-parent="#bookingsAccordion">
+      <div class="card-body" style="padding: 0.75rem 1rem;">
+        <div class="container-fluid" style="padding: 0;">
+          <p style="margin-bottom: 0.5rem;">
+            <b>Box</b><br />
+            <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ get_value(row, 'url') }}" target="_blank">{{
+              get_value(row, 'url') }}</a>
+          </p>
+          <p style="margin-bottom: 0.5rem;">
+            <b>Activo</b><br />
+            {{ "Sí" if row["is_active"] else "No" }}
+          </p>
+          <p style="margin-bottom: 0.5rem;">
+            <b>Apertura de reservas</b><br />
+            {{ get_value(row, 'offset') }} a las {{ get_value(row, 'available_at') }}
+          </p>
+          <p style="margin-bottom: 0.5rem;">
+            <b>Última reserva realizada</b><br />
+            {% if row['last_book_date'] %}
+            {{ get_value(row, 'last_book_date') }}
+            {% else %}
+            <i>Ninguna</i>
+            {% endif %}
+          </p>
+          <p style="margin-bottom: 0.5rem;">
+            <b>Estado</b><br />
+            {% if row['last_events'] %}
+            {{ row['last_events'][0]['date'].strftime('%d/%m/%Y %H:%M') }}:
+            {% for event in row['last_events'] %}
+            {{ event['event'].rstrip(".") }}.
+            {% endfor %}
+            <br /><a href="/event/?search=%3D{{row['id']}}">Ver todos <i class="bi bi-arrow-up-right"></i></a>
+            {% else %}
+            <i>Aún no hay eventos registrados para esta reserva. Los eventos aparecerán aquí cuando la reserva esté
+              activa según vayan ocurriendo.</i>
+            {% endif %}
+          </p>
+          <p style="margin-bottom: 0.5rem;">
+            <b>Tipo de clase</b><br />
+            {% if row.type_class == 1 %}
+            OpenBox
+            {% else %}
+            Wod
+            {% endif %}
+          </p>
+          <p style="margin-bottom: 0;">
+            <b>Forzar reserva aunque esté fuera de ventana de autoreserva</b><br />
+            {{ "Sí" if row['book_despite_cancel_window'] else "No" }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if wodbuster_bookings %}
+<div class="mt-4">
+  <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem;">
+    <i class="bi bi-calendar-check me-2"></i> Reservas activas en WodBuster
+  </h3>
+  <div class="accordion" id="wodbusterBookingsAccordion">
+    {% set wb_date_ns = namespace(current=None) %}
+    {% for wb_booking in wodbuster_bookings %}
+    {% set wb_date = wb_booking.class_date %}
+    {% set wb_dow = wb_date.weekday() %}
+    {% if wb_date_ns.current != wb_date %}
+    {% set wb_date_ns.current = wb_date %}
+    <div class="weekday-header"
+      style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border: 1px solid #93c5fd; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #1e40af; font-size: 1rem;">
+      <span>{{ DAYS_OF_WEEK[wb_dow] }} {{ wb_date.strftime('%d/%m/%Y') }}</span>
+    </div>
+    {% endif %}
+    {% set is_same_date_as_prev = loop.index0 > 0 and wodbuster_bookings[loop.index0 - 1].class_date == wb_date %}
+    <div class="card"
+      style="margin-bottom: {% if is_same_date_as_prev %}0.25rem{% else %}0.5rem{% endif %}; border-left: 4px solid #3b82f6;">
+      <div class="card-header d-flex justify-content-between" id="headingWB{{wb_booking.id}}"
+        style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
+        <h2 class="mb-0 mr-auto" style="margin-bottom: 0;">
+          <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse"
+            data-target="#collapseWB{{wb_booking.id}}" aria-expanded="false" aria-controls="collapseWB{{wb_booking.id}}"
+            style="padding: 0; text-decoration: none;">
+            <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">
+              {{ wb_booking.class_time.strftime('%H:%M') }}
+              <span class="badge"
+                style="background-color: {{ wb_booking.badge_color or '#3b82f6' }}; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem; border-radius: 4px; font-weight: 500;">
+                {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
+              </span>
+            </h4>
+          </button>
+        </h2>
+      </div>
+      <div id="collapseWB{{wb_booking.id}}" class="collapse" aria-labelledby="headingWB{{wb_booking.id}}"
+        data-parent="#wodbusterBookingsAccordion">
+        <div class="card-body" style="padding: 0.75rem 1rem;">
+          <div class="container-fluid" style="padding: 0;">
+            <p style="margin-bottom: 0.5rem;">
+              <b>Fecha</b><br />
+              {{ wb_booking.class_date.strftime('%d/%m/%Y') }}
+            </p>
+            <p style="margin-bottom: 0.5rem;">
+              <b>Hora</b><br />
+              {{ wb_booking.class_time.strftime('%H:%M') }}
+            </p>
+            <p style="margin-bottom: 0.5rem;">
+              <b>Clase</b><br />
+              {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
+            </p>
+            <p style="margin-bottom: 0.5rem;">
+              <b>Box</b><br />
+              <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ wb_booking.box_url }}" target="_blank">{{
+                wb_booking.box_url }}</a>
+            </p>
+            <p style="margin-bottom: 0;">
+              <b>Sincronizado</b><br />
+              {{ wb_booking.fetched_at.strftime('%d/%m/%Y %H:%M') if wb_booking.fetched_at else 'N/A' }}
+            </p>
+            <div style="margin-top: 1rem;">
+              <form method="POST" action="{{ url_for('booking.cancel_wodbuster_booking') }}"
+                onsubmit="return confirm('¿Estás seguro de que quieres cancelar esta reserva?');"
+                style="display: inline;">
+                {% if csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                {% endif %}
+                <input type="hidden" name="booking_id" value="{{ wb_booking.id }}">
+                <button type="submit" class="btn btn-danger btn-sm">
+                  <i class="bi bi-trash"></i> Cancelar Reserva
+                </button>
+              </form>
             </div>
           </div>
         </div>
-    {% endfor %}
-    </div>
-  {% endif %}
-  
-  {% if wodbuster_bookings %}
-    <div class="mt-4">
-      <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem;">
-        <i class="bi bi-calendar-check me-2"></i> Reservas activas en WodBuster
-      </h3>
-      <div class="accordion" id="wodbusterBookingsAccordion">
-        {% set wb_date_ns = namespace(current=None) %}
-        {% for wb_booking in wodbuster_bookings %}
-          {% set wb_date = wb_booking.class_date %}
-          {% set wb_dow = wb_date.weekday() %}
-          {% if wb_date_ns.current != wb_date %}
-            {% set wb_date_ns.current = wb_date %}
-            <div class="weekday-header" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border: 1px solid #93c5fd; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #1e40af; font-size: 1rem;">
-              <span>{{ DAYS_OF_WEEK[wb_dow] }} {{ wb_date.strftime('%d/%m/%Y') }}</span>
-            </div>
-          {% endif %}
-          {% set is_same_date_as_prev = loop.index0 > 0 and wodbuster_bookings[loop.index0 - 1].class_date == wb_date %}
-          <div class="card" style="margin-bottom: {% if is_same_date_as_prev %}0.25rem{% else %}0.5rem{% endif %}; border-left: 4px solid #3b82f6;">
-            <div class="card-header d-flex justify-content-between" id="headingWB{{wb_booking.id}}" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
-              <h2 class="mb-0 mr-auto" style="margin-bottom: 0;">
-                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseWB{{wb_booking.id}}" aria-expanded="false" aria-controls="collapseWB{{wb_booking.id}}" style="padding: 0; text-decoration: none;">
-                  <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">
-                    {{ wb_booking.class_time.strftime('%H:%M') }}
-                    <span class="badge" style="background-color: {{ wb_booking.badge_color or '#3b82f6' }}; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem; border-radius: 4px; font-weight: 500;">
-                      {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
-                    </span>
-                  </h4>
-                </button>
-              </h2>
-            </div>
-            <div id="collapseWB{{wb_booking.id}}" class="collapse" aria-labelledby="headingWB{{wb_booking.id}}" data-parent="#wodbusterBookingsAccordion">
-              <div class="card-body" style="padding: 0.75rem 1rem;">
-                <div class="container-fluid" style="padding: 0;">
-                  <p style="margin-bottom: 0.5rem;">
-                    <b>Fecha</b><br/>
-                    {{ wb_booking.class_date.strftime('%d/%m/%Y') }}
-                  </p>
-                  <p style="margin-bottom: 0.5rem;">
-                    <b>Hora</b><br/>
-                    {{ wb_booking.class_time.strftime('%H:%M') }}
-                  </p>
-                  <p style="margin-bottom: 0.5rem;">
-                    <b>Clase</b><br/>
-                    {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
-                  </p>
-                  <p style="margin-bottom: 0.5rem;">
-                    <b>Box</b><br/>
-                    <i class="bi bi-box-arrow-in-up-right"></i> <a href="{{ wb_booking.box_url }}" target="_blank">{{ wb_booking.box_url }}</a>
-                  </p>
-                  <p style="margin-bottom: 0;">
-                    <b>Sincronizado</b><br/>
-                    {{ wb_booking.fetched_at.strftime('%d/%m/%Y %H:%M') if wb_booking.fetched_at else 'N/A' }}
-                  </p>
-                  <div style="margin-top: 1rem;">
-                    <form method="POST" action="{{ url_for('booking.cancel_wodbuster_booking') }}" onsubmit="return confirm('¿Estás seguro de que quieres cancelar esta reserva?');" style="display: inline;">
-                      {% if csrf_token %}
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                      {% endif %}
-                      <input type="hidden" name="booking_id" value="{{ wb_booking.id }}">
-                      <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="bi bi-trash"></i> Cancelar Reserva
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
       </div>
     </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Auto-sync loading indicator -->
+<div id="autosync-loading" style="display: none; text-align: center; padding: 10px;">
+  <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Sincronizando reservas de
+  WodBuster...
+</div>
+
+<div id="syncToastHost" aria-live="polite" aria-atomic="true">
+  <div id="syncToast" class="sync-toast" role="status" aria-hidden="true"></div>
+</div>
+
+<style>
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  #syncToastHost {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1080;
+    pointer-events: none;
+  }
+
+  .sync-toast {
+    min-width: 160px;
+    max-width: 320px;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    font-size: 0.82rem;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    color: #fff;
+    pointer-events: none;
+    display: none;
+    text-align: center;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  .sync-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+    display: block;
+  }
+
+  .sync-toast.success {
+    background: rgba(37, 99, 235, 0.5);
+  }
+
+  .sync-toast.error {
+    background: rgba(220, 53, 69, 0.88);
+  }
+
+  .new-booking-mobile-btn {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.25);
+    flex: 0 0 42px;
+    align-self: center;
+  }
+
+  .new-booking-mobile-btn i {
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+</style>
+
+<script>
+  // Set auto-sync enabled flag for autosync.js
+  {% if current_user.is_authenticated and current_user.wodbuster_autosync_enabled %}
+  window.AUTOSYNC_ENABLED = true;
+  {% else %}
+  window.AUTOSYNC_ENABLED = false;
   {% endif %}
-  
-  <!-- Auto-sync loading indicator -->
-  <div id="autosync-loading" style="display: none; text-align: center; padding: 10px;">
-    <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Sincronizando reservas de WodBuster...
-  </div>
 
-  <div id="syncToastHost" aria-live="polite" aria-atomic="true">
-    <div id="syncToast" class="sync-toast" role="status" aria-hidden="true"></div>
-  </div>
-  
-  <style>
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    #syncToastHost {
-      position: fixed;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1080;
-      pointer-events: none;
-    }
-    .sync-toast {
-      min-width: 160px;
-      max-width: 320px;
-      padding: 0.35rem 0.75rem;
-      border-radius: 20px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-      font-size: 0.82rem;
-      opacity: 0;
-      transform: translateY(-6px);
-      transition: opacity 0.18s ease, transform 0.18s ease;
-      color: #fff;
-      pointer-events: none;
-      display: none;
-      text-align: center;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-    }
-    .sync-toast.show {
-      opacity: 1;
-      transform: translateY(0);
-      display: block;
-    }
-    .sync-toast.success {
-      background: rgba(37, 99, 235, 0.5);
-    }
-    .sync-toast.error {
-      background: rgba(220, 53, 69, 0.88);
-    }
-    .new-booking-mobile-btn {
-      width: 42px;
-      height: 42px;
-      padding: 0;
-      border-radius: 50%;
-      box-shadow: 0 2px 8px rgba(13, 110, 253, 0.25);
-      flex: 0 0 42px;
-      align-self: center;
-    }
-    .new-booking-mobile-btn i {
-      font-size: 1.1rem;
-      line-height: 1;
-    }
-  </style>
-  
-  <script>
-    // Set auto-sync enabled flag for autosync.js
-    {% if current_user.is_authenticated and current_user.wodbuster_autosync_enabled %}
-      window.AUTOSYNC_ENABLED = true;
-    {% else %}
-      window.AUTOSYNC_ENABLED = false;
-    {% endif %}
-    
-    // Set CSRF token for AJAX requests
-    {% if csrf_token %}
-      window.CSRF_TOKEN = '{{ csrf_token() }}';
-    {% endif %}
+  // Set CSRF token for AJAX requests
+  {% if csrf_token %}
+  window.CSRF_TOKEN = '{{ csrf_token() }}';
+  {% endif %}
 
-    window.MANUAL_SYNC_STATUS = {{ request.args.get('sync_status')|tojson }};
-    window.MANUAL_SYNC_MESSAGE = {{ request.args.get('sync_message')|tojson }};
+  window.MANUAL_SYNC_STATUS = {{ request.args.get('sync_status') | tojson }};
+  window.MANUAL_SYNC_MESSAGE = {{ request.args.get('sync_message') | tojson }};
 
-    var syncToastTimer = null;
-    window.showSyncPopup = function (message, type) {
-      var toast = document.getElementById('syncToast');
-      if (!toast || !message) {
-        return;
-      }
-      var safeType = type === 'success' ? 'success' : 'error';
-      var icon = safeType === 'success' ? '<i class="bi bi-check-circle"></i>' : '<i class="bi bi-exclamation-triangle"></i>';
-      toast.className = 'sync-toast ' + safeType;
-      toast.innerHTML = icon + ' ' + message;
-      toast.setAttribute('aria-hidden', 'false');
-      toast.classList.add('show');
+  var syncToastTimer = null;
+  window.showSyncPopup = function (message, type) {
+    var toast = document.getElementById('syncToast');
+    if (!toast || !message) {
+      return;
+    }
+    var safeType = type === 'success' ? 'success' : 'error';
+    var icon = safeType === 'success' ? '<i class="bi bi-check-circle"></i>' : '<i class="bi bi-exclamation-triangle"></i>';
+    toast.className = 'sync-toast ' + safeType;
+    toast.innerHTML = icon + ' ' + message;
+    toast.setAttribute('aria-hidden', 'false');
+    toast.classList.add('show');
 
-      if (syncToastTimer) {
-        clearTimeout(syncToastTimer);
-      }
-      syncToastTimer = setTimeout(function () {
-        toast.classList.remove('show');
-        toast.setAttribute('aria-hidden', 'true');
-      }, 4000);
-    };
+    if (syncToastTimer) {
+      clearTimeout(syncToastTimer);
+    }
+    syncToastTimer = setTimeout(function () {
+      toast.classList.remove('show');
+      toast.setAttribute('aria-hidden', 'true');
+    }, 4000);
+  };
 
-    (function showRedirectSyncPopup() {
-      if (window.MANUAL_SYNC_STATUS && window.MANUAL_SYNC_MESSAGE) {
-        window.showSyncPopup(window.MANUAL_SYNC_MESSAGE, window.MANUAL_SYNC_STATUS);
-      }
-    })();
+  (function showRedirectSyncPopup() {
+    if (window.MANUAL_SYNC_STATUS && window.MANUAL_SYNC_MESSAGE) {
+      window.showSyncPopup(window.MANUAL_SYNC_MESSAGE, window.MANUAL_SYNC_STATUS);
+    }
+  })();
 
-    // Show spinner when manual Sync WodBuster is submitted
-    (function () {
-      var form = document.getElementById('syncWodBusterForm');
-      if (form) {
-        form.addEventListener('submit', function (event) {
-          event.preventDefault();
-          var btn = document.getElementById('syncWodBusterBtn');
-          if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite; display: inline-block;"></i> Sincronizando...';
-          }
-          var loading = document.getElementById('autosync-loading');
-          if (loading) loading.style.display = 'block';
-          window.requestAnimationFrame(function () {
-            setTimeout(function () {
-              form.submit();
-            }, 30);
-          });
+  // Show spinner when manual Sync WodBuster is submitted
+  (function () {
+    var form = document.getElementById('syncWodBusterForm');
+    if (form) {
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var btn = document.getElementById('syncWodBusterBtn');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite; display: inline-block;"></i> Sincronizando...';
+        }
+        var loading = document.getElementById('autosync-loading');
+        if (loading) loading.style.display = 'block';
+        window.requestAnimationFrame(function () {
+          setTimeout(function () {
+            form.submit();
+          }, 30);
         });
-      }
-    })();
-  </script>
-  <script src="{{ url_for('static', filename='attendance-backfill.js') }}"></script>
+      });
+    }
+  })();
+</script>
+<script src="{{ url_for('static', filename='attendance-backfill.js') }}"></script>
 {% endblock %}

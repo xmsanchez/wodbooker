@@ -18,6 +18,7 @@ stats_from_services_for_calendar_month = _wa.stats_from_services_for_calendar_mo
 parse_billing_period_stats = _wa.parse_billing_period_stats
 filter_records_to_calendar_month = _wa.filter_records_to_calendar_month
 compute_ytd_yoy_mood = _wa.compute_ytd_yoy_mood
+compute_quota_mood = _wa.compute_quota_mood
 
 # Minimal fixture based on real Master_MisServicios shape
 _SERVICES_FIXTURE = {
@@ -74,6 +75,86 @@ class WodBusterAttendanceTests(unittest.TestCase):
         self.assertEqual(yoy.ytd_attended_current, 8)
         self.assertEqual(yoy.ytd_attended_previous, 6)
         self.assertTrue(yoy.has_comparison)
+
+    def test_quota_mood_early_month_good_pace(self):
+        # On Sept 3rd (day 3/30), 2 attended classes out of 16 target is ~125% expected pace
+        mood = compute_quota_mood(
+            attended=2,
+            booked=3,
+            quota_total=16,
+            period_from=datetime.date(2026, 9, 1),
+            period_to=datetime.date(2026, 9, 30),
+            today=datetime.date(2026, 9, 3),
+        )
+        self.assertEqual(mood.label, '¡Estás on fire!')
+        self.assertIn('Semana 1', mood.subtitle)
+        self.assertIn('2 asistidas de 16', mood.subtitle)
+
+    def test_quota_mood_mid_month_low_attended_does_not_say_on_fire(self):
+        # On Sept 13th (day 13/30), 5 attended classes out of 16 target (even with 10 booked)
+        # Expected to date is (13/30)*16 ~= 6.93. 5 attended is ~72.1% pace -> "No vas mal este mes, ¡ánimo!"
+        mood = compute_quota_mood(
+            attended=5,
+            booked=10,
+            quota_total=16,
+            period_from=datetime.date(2026, 9, 1),
+            period_to=datetime.date(2026, 9, 30),
+            today=datetime.date(2026, 9, 13),
+        )
+        self.assertEqual(mood.label, 'No vas mal este mes, ¡ánimo!')
+        self.assertIn('Semana 2', mood.subtitle)
+        self.assertIn('5 asistidas de 16', mood.subtitle)
+
+    def test_quota_mood_early_month_moderate_pace(self):
+        # On Sept 3rd (day 3/30), 1 attended class out of 16 target is ~62.5% expected pace
+        mood = compute_quota_mood(
+            attended=1,
+            booked=2,
+            quota_total=16,
+            period_from=datetime.date(2026, 9, 1),
+            period_to=datetime.date(2026, 9, 30),
+            today=datetime.date(2026, 9, 3),
+        )
+        self.assertEqual(mood.label, 'No vas mal este mes, ¡ánimo!')
+        self.assertIn('Semana 1', mood.subtitle)
+
+    def test_quota_mood_unlimited_subscription(self):
+        # Unlimited subscription (quota_total=0) with 11 attended classes on Sept 13th
+        # Should treat 16 classes as target, expected to date is (13/30)*16 ~= 6.9, 11 attended is ~159% pace
+        mood = compute_quota_mood(
+            attended=11,
+            quota_total=0,
+            period_from=datetime.date(2026, 9, 1),
+            period_to=datetime.date(2026, 9, 30),
+            today=datetime.date(2026, 9, 13),
+        )
+        self.assertEqual(mood.label, '¡Estás on fire!')
+        self.assertIn('ilimitada', mood.subtitle)
+        self.assertIn('Semana 2', mood.subtitle)
+
+    def test_quota_mood_late_month_behind_pace(self):
+        # On Sept 28th (day 28/30), only 2 attended classes out of 16 target
+        mood = compute_quota_mood(
+            attended=2,
+            quota_total=16,
+            period_from=datetime.date(2026, 9, 1),
+            period_to=datetime.date(2026, 9, 30),
+            today=datetime.date(2026, 9, 28),
+        )
+        self.assertEqual(mood.label, 'Por ahora no es tu mejor mes')
+        self.assertIn('Semana 4', mood.subtitle)
+
+    def test_quota_mood_full_quota_reached_early(self):
+        # 16 classes attended by mid month
+        mood = compute_quota_mood(
+            attended=16,
+            quota_total=16,
+            period_from=datetime.date(2026, 9, 1),
+            period_to=datetime.date(2026, 9, 30),
+            today=datetime.date(2026, 9, 15),
+        )
+        self.assertEqual(mood.label, '¡Estás on fire!')
+        self.assertGreaterEqual(mood.usage_pct, 1.0)
 
 
 if __name__ == '__main__':

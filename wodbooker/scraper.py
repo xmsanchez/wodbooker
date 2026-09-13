@@ -295,12 +295,13 @@ class Scraper():
         epoch = int(midnight.timestamp())
         return self._book_request(f'{url}/athlete/handlers/LoadClass.ashx?ticks={epoch}'), epoch
 
-    def get_week_classes(self, url: str, start_date: datetime.date, athlete_id: str = None) -> dict:
+    def get_week_classes(self, url: str, start_date: datetime.date, athlete_id: str = None, days: int = 7) -> dict:
         """
-        Get classes for a week (7 days) starting from the given date
+        Get classes for a period (defaults to 7 days) starting from the given date
         :param url: The WodBuster URL associated to the box where classes have to be obtained
-        :param start_date: The first day of the week (datetime.date)
+        :param start_date: The first day of the period (datetime.date)
         :param athlete_id: Optional athlete ID to include in the API request (without dashes)
+        :param days: Number of days to fetch (defaults to 7)
         :return: A dictionary where keys are dates (datetime.date) and values are lists of class dictionaries.
                  Each class dictionary contains: Hora, NombreE, IdE, Id, Borrable
         :raises LoginError: If user/password combination fails.
@@ -311,7 +312,7 @@ class Scraper():
         self.login()
         week_classes = {}
         
-        for day_offset in range(7):
+        for day_offset in range(days):
             current_date = start_date + datetime.timedelta(days=day_offset)
             midnight = _UTC_TZ.localize(datetime.datetime.combine(current_date, datetime.datetime.min.time()))
             epoch = int(midnight.timestamp())
@@ -325,9 +326,25 @@ class Scraper():
             
             try:
                 response = self._book_request(api_url)
-                # Extract ListClases from response
-                list_clases = response.get('ListClases', [])
-                week_classes[current_date] = list_clases
+                if response and 'Data' in response:
+                    classes_for_day = []
+                    for slot in response.get('Data', []):
+                        slot_time = slot.get('Hora', '')
+                        valores = slot.get('Valores', [])
+                        valores_list = list(valores.values()) if isinstance(valores, dict) else (valores if isinstance(valores, list) else [])
+                        for val in valores_list:
+                            valor = val.get('Valor', {}) if isinstance(val, dict) else {}
+                            classes_for_day.append({
+                                'Hora': valor.get('HoraComienzo') or slot_time,
+                                'NombreE': valor.get('Nombre') or valor.get('NombreE') or (val.get('Nombre') if isinstance(val, dict) else ''),
+                                'IdE': valor.get('IdTipoEntrenamiento') or valor.get('IdE'),
+                                'Id': valor.get('Id'),
+                            })
+                    week_classes[current_date] = classes_for_day
+                elif response and 'ListClases' in response:
+                    week_classes[current_date] = response.get('ListClases', [])
+                else:
+                    week_classes[current_date] = []
             except Exception as e:
                 logging.warning("Error fetching classes for date %s: %s", current_date, str(e))
                 week_classes[current_date] = []
