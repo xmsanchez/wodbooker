@@ -27,11 +27,42 @@
                 white-space: nowrap;
             }
         }
+        .dropdown-item.text-danger:hover {
+            background-color: #fef2f2;
+            color: #dc2626 !important;
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark fixed-top">
-        <a class="navbar-brand" href="{{ url_for('booking.index_view') }}">WodBooker</a>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('booking.index_view') }}">
+                <i class="bi bi-calendar-check me-2"></i> WodBooker
+            </a>
+            {% if current_user.is_authenticated %}
+            <div class="navbar-nav ml-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button" data-toggle="dropdown">
+                        {% if current_user.profile_picture_url %}
+                            <img src="{{ current_user.profile_picture_url }}" alt="Profile" style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; object-fit: cover; vertical-align: middle;">
+                        {% else %}
+                            <i class="bi bi-person-circle" style="font-size: 1.2rem; margin-right: 8px;"></i>
+                        {% endif %}
+                        {{ current_user.email }}
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right">
+                        <a class="dropdown-item d-flex align-items-center" href="{{ url_for('user.index_view') }}">
+                            <i class="bi bi-person" style="font-size: 1.1rem; margin-right: 8px;"></i> Ver perfil
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('admin.logout_view') }}">
+                            <i class="bi bi-box-arrow-right" style="font-size: 1.1rem; margin-right: 8px;"></i> Cerrar Sesión
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
     </nav>
     <div class="content">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
