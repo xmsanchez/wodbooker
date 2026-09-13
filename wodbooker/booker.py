@@ -47,7 +47,7 @@ WHITELIST_EMAILS = os.getenv('BOOKING_WHITELIST_EMAILS', '').split()
 # I know it's a weird workaround :-)
 _MAX_ERRORS = 500
 _MAX_BOOKING_ATTEMPTS = 20
-GLOBAL_BOOKING_INTERVAL = 0.5
+GLOBAL_BOOKING_INTERVAL = 1.0
 BOOKING_RETRY_DELAY = 1
 BOOKING_LOCKED_DELAY = 0.2
 
@@ -57,6 +57,17 @@ __CURRENT_THREADS = {
 # Simple in-memory coordination for user bookings
 _GLOBAL_BOOKING_LOCK = threading.Lock()
 _LAST_GLOBAL_BOOKING_TIME = None
+
+# Per-user locks to prevent concurrent bookings for the same user
+_USER_BOOKING_LOCKS = {}
+_USER_BOOKING_LOCKS_MUTEX = threading.Lock()
+
+
+def _get_user_booking_lock(user_id: int) -> threading.Lock:
+    with _USER_BOOKING_LOCKS_MUTEX:
+        if user_id not in _USER_BOOKING_LOCKS:
+            _USER_BOOKING_LOCKS[user_id] = threading.Lock()
+        return _USER_BOOKING_LOCKS[user_id]
 
 
 def _get_next_date_for_weekday(base_date: date, weekday: int) -> date:
@@ -151,13 +162,20 @@ class Booker(StoppableThread):
     def _attempt_booking(self, datetime_to_book, scraper):
         booking_successful = False
         force_exit = False
+        locked_attempts = 0
+        max_locked_attempts = 100  # 100 * 0.2s = 20s
         while not booking_successful and not force_exit:
             try:
                 scraper.book(self._booking.url, datetime_to_book, self._booking.type_class)
                 booking_successful = True
             except BookingLockedException as e:
-                logging.warning("Booking locked for user %s: %s. Retrying in %.2f second...",
-                                self._booking.user.email, str(e), BOOKING_LOCKED_DELAY)
+                locked_attempts += 1
+                if locked_attempts >= max_locked_attempts:
+                    logging.error("Booking remained locked for user %s after %d attempts: %s",
+                                  self._booking.user.email, locked_attempts, str(e))
+                    raise BookingFailed(f"Reserva bloqueada tras múltiples intentos: {str(e)}")
+                logging.warning("Booking locked for user %s: %s. Retrying in %.2f second (attempt %d/%d)...",
+                                self._booking.user.email, str(e), BOOKING_LOCKED_DELAY, locked_attempts, max_locked_attempts)
                 time_module.sleep(BOOKING_LOCKED_DELAY)
                 continue
         return booking_successful
@@ -270,28 +288,31 @@ class Booker(StoppableThread):
                     else:
                         high_level_logger.info("User %s has priority, proceeding with booking immediately", self._booking.user.email)
 
-                    # Use coordinator to ensure 1-second minimum interval between bookings
-                    with _GLOBAL_BOOKING_LOCK:
-                        global _LAST_GLOBAL_BOOKING_TIME
-                        now = datetime.now(_MADRID_TZ)
-                        if _LAST_GLOBAL_BOOKING_TIME:
-                            time_since_last = (now - _LAST_GLOBAL_BOOKING_TIME).total_seconds()
-                            if time_since_last < GLOBAL_BOOKING_INTERVAL:
-                                sleep_time = GLOBAL_BOOKING_INTERVAL - time_since_last
-                                logging.info("Waiting %.2f seconds to maintain %.2f-second global booking interval", sleep_time, GLOBAL_BOOKING_INTERVAL)
-                                time_module.sleep(sleep_time)
-                        
-                        _LAST_GLOBAL_BOOKING_TIME = datetime.now(_MADRID_TZ)
-
-                    # Refresh the scraper in case a new one is avaiable
-                    scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
-
                     # generate a random number in milliseconds to avoid being detected as a bot
                     logging.info("Sleeping for %s seconds", sleep_milliseconds)
                     time_module.sleep(sleep_milliseconds)
 
-                    if self._attempt_booking(datetime_to_book, scraper):
-                        event, errors, class_is_full_notification_sent = self._handle_successful_booking(day_to_book, scraper, errors, class_is_full_notification_sent)
+                    # Synchronize per-user so multiple booking threads for the same user do not hit WodBuster simultaneously
+                    user_booking_lock = _get_user_booking_lock(self._booking.user.id)
+                    with user_booking_lock:
+                        # Use coordinator to ensure 1-second minimum interval between bookings
+                        with _GLOBAL_BOOKING_LOCK:
+                            global _LAST_GLOBAL_BOOKING_TIME
+                            now = datetime.now(_MADRID_TZ)
+                            if _LAST_GLOBAL_BOOKING_TIME:
+                                time_since_last = (now - _LAST_GLOBAL_BOOKING_TIME).total_seconds()
+                                if time_since_last < GLOBAL_BOOKING_INTERVAL:
+                                    sleep_time = GLOBAL_BOOKING_INTERVAL - time_since_last
+                                    logging.info("Waiting %.2f seconds to maintain %.2f-second global booking interval", sleep_time, GLOBAL_BOOKING_INTERVAL)
+                                    time_module.sleep(sleep_time)
+                            
+                            _LAST_GLOBAL_BOOKING_TIME = datetime.now(_MADRID_TZ)
+
+                        # Refresh the scraper in case a new one is avaiable
+                        scraper = get_scraper(self._booking.user.email, self._booking.user.cookie)
+
+                        if self._attempt_booking(datetime_to_book, scraper):
+                            event, errors, class_is_full_notification_sent = self._handle_successful_booking(day_to_book, scraper, errors, class_is_full_notification_sent)
 
                     # Send push notification for successful booking
                     send_booking_status_notification(

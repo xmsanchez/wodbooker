@@ -225,7 +225,11 @@ class Scraper():
                     if "penalización" in error_message.lower() or "penalizaciones" in error_message.lower() or "demasiado pronto" in error_message.lower():
                         logging.info('Booking penalization.')
                         raise BookingPenalization(error_message)
-                    elif "another place" in error_message.lower() or "otro lugar" in error_message.lower():
+                    elif (
+                        "another place" in error_message.lower()
+                        or "otro lugar" in error_message.lower()
+                        or "otro sitio" in error_message.lower()
+                    ):
                         logging.info('Booking locked - user using reservation in another place.')
                         raise BookingLockedException(error_message)
                     else:

@@ -100,11 +100,17 @@ This also applies after `ClassIsFull` / `_EventWaiter`: a last-minute opening in
 
 When a waiter finishes and `_datetime_to_book` changes, logs `EventMessage.CLASS_WAITING_OVER` and resets `class_is_full_notification_sent`.
 
+## Concurrency & Locking Safeguards
+
+1. **Per-user synchronization (`_get_user_booking_lock`)**: Multiple Booker threads for the same user serialize booking attempts with a user-level lock, preventing concurrent WodBuster session requests.
+2. **Global interval (`_GLOBAL_BOOKING_LOCK`)**: Enforces `GLOBAL_BOOKING_INTERVAL` (1.0s) between consecutive booking attempts globally across all users.
+3. **Random jitter**: A random delay (1ms–1000ms) runs *before* acquiring the locks to prevent synchronized bot patterns without disrupting the pacing interval.
+
 ## `_attempt_booking`
 
 Calls `scraper.book(url, datetime_to_book, type_class)`.
 
-- **`BookingLockedException`**: retry every `BOOKING_LOCKED_DELAY` (0.2s) until success (user booking elsewhere).
+- **`BookingLockedException`**: Retries every `BOOKING_LOCKED_DELAY` (0.2s) up to 100 attempts (20 seconds). Catches WodBuster messages like `"Estás usando la reserva de clases en otro sitio"`. If still locked after 20 seconds, raises `BookingFailed`.
 - Other exceptions propagate to the main loop handlers.
 
 ## Success path
