@@ -69,6 +69,10 @@
         .card-body > div:last-child {
             border-bottom: none !important;
         }
+        .dropdown-item.text-danger:hover {
+            background-color: #fef2f2;
+            color: #dc2626 !important;
+        }
     </style>
 </head>
 <body>
@@ -89,9 +93,13 @@
                         {{ current_user.email }}
                     </a>
                     <div class="dropdown-menu dropdown-menu-right">
-                        <a class="dropdown-item" href="{{ url_for('user.index_view') }}">Ver perfil</a>
+                        <a class="dropdown-item d-flex align-items-center" href="{{ url_for('user.index_view') }}">
+                            <i class="bi bi-person" style="font-size: 1.1rem; margin-right: 8px;"></i> Ver perfil
+                        </a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="{{ url_for('admin.logout_view') }}">Cerrar Sesión</a>
+                        <a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('admin.logout_view') }}">
+                            <i class="bi bi-box-arrow-right" style="font-size: 1.1rem; margin-right: 8px;"></i> Cerrar Sesión
+                        </a>
                     </div>
                 </div>
             </div>
