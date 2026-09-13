@@ -35,7 +35,7 @@ Base path pattern: `{box_url}/athlete/handlers/`
 2. If no `Data` → `BookingNotAvailable` (may include `PrimeraHoraPublicacion` as `available_at`).
 3. If `AtletasEntrenando >= Plazas` → `ClassIsFull`.
 4. If no matching hour → `ClassNotFound`.
-5. POST enroll/move → if `EsCorrecto` false → `BookingFailed`, `BookingPenalization`, or `BookingLockedException` based on message text.
+5. POST enroll/move → if `EsCorrecto` false → `BookingFailed`, `BookingPenalization`, or `BookingLockedException` based on message text (`"another place"`, `"otro lugar"`, `"otro sitio"`).
 
 ## Server-Sent Events (SSE)
 
@@ -97,7 +97,7 @@ UI APIs use `_ui_api_request` (SPA headers + `reservas.aspx` warmup). Historical
 | `ClassNotFound` | No matching time slot | Retry 20×, then skip week |
 | `BookingFailed` | Book API rejected (not penalization/locked) | Skip week, email + push failure |
 | `BookingPenalization` | Too soon after cancel / penalization message | Sleep parsed duration or SSE wait |
-| `BookingLockedException` | User booking in another session | Retry every 0.2s in `_attempt_booking` |
+| `BookingLockedException` | User booking in another session (`"otro sitio"`) | Retry every 0.2s in `_attempt_booking` (up to 20s / 100 attempts) |
 
 `RequestException` from `requests` is handled like transient network errors (not defined in `exceptions.py`).
 
