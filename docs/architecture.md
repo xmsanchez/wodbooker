@@ -91,6 +91,9 @@ erDiagram
 | `NotificationSent` | `notification_sent` | Dedup for class reminders |
 | `ClassTrainingDescription` | `class_training_description` | Cached WOD board text |
 | `AthleteMonthlyStats` | `athlete_monthly_stats` | Calendar-month attendance cache |
+| `WodBusterClassSchedule` | `wodbuster_class_schedule` | Cached 14-day weekly class schedule (v1.15.0) |
+
+`WodBusterClassSchedule` (v1.15.0): caches 14-day weekly class schedules per user/box to display class badges on booking cards without external HTTP calls. Rollback: `migrations/v1.15.0/rollback_wodbuster_class_schedule.sql`.
 
 `User.cancel_window_hours` / `stop_autobook_in_cancel_window` (v1.14.0): avoid autobooking inside the late-cancel penalization window. `Booking.book_despite_cancel_window` can force booking inside the window for one rule.
 

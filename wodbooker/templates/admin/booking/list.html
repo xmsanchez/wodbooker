@@ -2,6 +2,19 @@
 {% block head %}
 {{ super() }}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+  .class-badge-completed {
+    opacity: 0.65;
+  }
+
+  .class-badge-next-week {
+    font-size: 0.65rem !important;
+    padding: 0.15rem 0.35rem !important;
+    margin-left: 0.25rem !important;
+    font-weight: 500 !important;
+    vertical-align: middle !important;
+  }
+</style>
 {% endblock %}
 {% block model_menu_bar %}
 {% set error_ns = namespace(error=False) %}
@@ -43,7 +56,7 @@
     {% endif %}
     <a class="btn btn-outline-primary btn-sm" href="{{ url_for('weekly_classes') }}" role="button"
       title="Ver horarios de clases">
-      <i class="bi bi-calendar-week"></i> Horarios de clase
+      <i class="bi bi-calendar-week"></i> Horarios
     </a>
     <a class="btn btn-primary d-none d-md-inline-block" href="{{ get_url('.create_view', url=return_url, modal=True) }}"
       role="button">
@@ -209,6 +222,15 @@
           data-target="#collapse{{row['id']}}" aria-expanded="true" aria-controls="collapse{{row['id']}}"
           style="padding: 0; text-decoration: none;">
           <h4 style="margin-bottom: 0.25rem; font-size: 1rem; font-weight: 600;">{{ get_value(row, 'time') }}
+            {% if row.class_badge %}
+            <span class="badge {% if row.class_badge.state == 'completed' %}class-badge-completed{% endif %}"
+              style="background-color: {{ row.class_badge.color }}; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem; border-radius: 4px; font-weight: 500; vertical-align: middle;">
+              {{ row.class_badge.name }}
+            </span>
+            {% if row.class_badge.state == 'next_week' %}
+            <span class="badge badge-light border text-muted class-badge-next-week">Próx</span>
+            {% endif %}
+            {% endif %}
             {% if row['is_active'] and not row['is_thread_active'] %}
             <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
             {% endif %}

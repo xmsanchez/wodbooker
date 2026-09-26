@@ -326,7 +326,7 @@ class Scraper():
             
             try:
                 response = self._book_request(api_url)
-                if response and 'Data' in response:
+                if response and response.get('Data'):
                     classes_for_day = []
                     for slot in response.get('Data', []):
                         slot_time = slot.get('Hora', '')
@@ -334,15 +334,38 @@ class Scraper():
                         valores_list = list(valores.values()) if isinstance(valores, dict) else (valores if isinstance(valores, list) else [])
                         for val in valores_list:
                             valor = val.get('Valor', {}) if isinstance(val, dict) else {}
+                            nombre = valor.get('Nombre') or valor.get('NombreE') or (val.get('Nombre') if isinstance(val, dict) else '')
+                            id_e = valor.get('IdTipoEntrenamiento') or valor.get('IdE')
+                            if id_e in [2, 7] or 'open box' in (nombre or '').lower():
+                                class_type = 1
+                            else:
+                                class_type = 0
                             classes_for_day.append({
                                 'Hora': valor.get('HoraComienzo') or slot_time,
-                                'NombreE': valor.get('Nombre') or valor.get('NombreE') or (val.get('Nombre') if isinstance(val, dict) else ''),
-                                'IdE': valor.get('IdTipoEntrenamiento') or valor.get('IdE'),
+                                'NombreE': nombre,
+                                'IdE': id_e,
                                 'Id': valor.get('Id'),
+                                'class_type': class_type,
                             })
                     week_classes[current_date] = classes_for_day
-                elif response and 'ListClases' in response:
-                    week_classes[current_date] = response.get('ListClases', [])
+                elif response and response.get('ListClases'):
+                    raw_classes = response.get('ListClases', [])
+                    classes_for_day = []
+                    for rc in raw_classes:
+                        nombre = rc.get('NombreE') or rc.get('Nombre', '')
+                        id_e = rc.get('IdE') or rc.get('IdTipoEntrenamiento')
+                        if id_e in [2, 7] or 'open box' in (nombre or '').lower():
+                            class_type = 1
+                        else:
+                            class_type = 0
+                        classes_for_day.append({
+                            'Hora': rc.get('Hora', ''),
+                            'NombreE': nombre,
+                            'IdE': id_e,
+                            'Id': rc.get('Id'),
+                            'class_type': class_type,
+                        })
+                    week_classes[current_date] = classes_for_day
                 else:
                     week_classes[current_date] = []
             except Exception as e:

@@ -45,6 +45,7 @@ class User(db.Model):
     profile_picture_url = db.Column(db.String(512), nullable=True)
     wodbuster_bookings = db.relationship('WodBusterBooking', backref='user', lazy=True, cascade="all, delete-orphan")
     training_descriptions = db.relationship('ClassTrainingDescription', backref='user', lazy=True, cascade="all, delete-orphan")
+    class_schedules = db.relationship('WodBusterClassSchedule', backref='user', lazy=True, cascade="all, delete-orphan")
     
     # Push notification settings
     push_notifications_enabled = db.Column(db.Boolean, default=False)
@@ -170,3 +171,25 @@ class AthleteMonthlyStats(db.Model):
     __table_args__ = (
         db.UniqueConstraint('user_id', 'year', 'month', name='_user_year_month_uc'),
     )
+
+
+class WodBusterClassSchedule(db.Model):
+    __tablename__ = 'wodbuster_class_schedule'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    box_url = db.Column(db.String(128), nullable=False)
+    class_date = db.Column(db.Date, nullable=False, index=True)
+    class_time = db.Column(db.Time, nullable=False)
+    class_name = db.Column(db.String(128), nullable=False)
+    class_type = db.Column(db.Integer, default=0, nullable=False)  # 0 = Wod/regular, 1 = OpenBox
+    class_type_id = db.Column(db.Integer, nullable=True)  # IdTipoEntrenamiento / IdE
+    wodbuster_class_id = db.Column(db.Integer, nullable=True)  # Id from WodBuster
+    fetched_at = db.Column(db.DateTime, default=datetime.now)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'class_date', 'wodbuster_class_id', name='_user_date_wb_class_id_uc'),
+    )
+
+    def __str__(self):
+        return f"{self.class_date.strftime('%d/%m/%Y')} {self.class_time.strftime('%H:%M')} - {self.class_name}"
+

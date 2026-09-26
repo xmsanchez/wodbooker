@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, date, timedelta
 from collections import defaultdict
+from typing import Optional
 import pickle
 import requests
 import cloudscraper
@@ -16,7 +17,7 @@ from sqlalchemy import and_
 from flask_wtf import FlaskForm
 from flask_wtf import Recaptcha
 from flask_wtf.recaptcha import RecaptchaField
-from .models import User, db, Booking, WodBusterBooking, ClassTrainingDescription
+from .models import User, db, Booking, WodBusterBooking, ClassTrainingDescription, WodBusterClassSchedule
 from .booker import start_booking_loop, stop_booking_loop, is_booking_running, sync_training_descriptions_for_date
 from .attendance_stats import sync_wodbuster_all, get_attendance_dashboard
 from .scraper import refresh_scraper, get_scraper
@@ -369,6 +370,9 @@ class BookingAdmin(sqla.ModelView):
             obj.last_events = self._get_last_events(obj.events)
         # Sort by weekday (dow) first, then by reservation time
         data = sorted(data, key=lambda x: (x.dow, x.time))
+
+        if login.current_user.is_authenticated and data:
+            resolve_booking_class_badges(data, login.current_user)
         
         # Calculate statistics for each weekday
         weekday_stats = defaultdict(lambda: {'successful': 0, 'waiting': 0, 'errors': 0})
@@ -727,6 +731,14 @@ _MADRID_TZ = pytz.timezone('Europe/Madrid')
 _WODBUSTER_CLASS_COLOR_BY_NAME = {
     'GAP': '#ec4899',
     'ENDURANCE': '#0ea5e9',
+    'FUNCTIONAL': '#eab308',
+    'WOD': '#059669',
+    'GYMNASTICS': '#2563eb',
+    'TEENS': '#be185d',
+    'ADAPTED TRAINING': '#64748b',
+    'MINIMAL': '#eab308',
+    'OPEN BOX': '#000000',
+    'OPEN BOX*': '#000000',
 }
 
 _WODBUSTER_CLASS_COLOR_BY_ID = {
@@ -740,6 +752,115 @@ _WODBUSTER_CLASS_COLOR_BY_ID = {
     18: '#0ea5e9',
     19: '#ec4899',
 }
+
+
+def _get_class_badge_color(class_name: str, class_type_id: Optional[int] = None) -> str:
+    if class_name:
+        name_upper = class_name.upper().strip()
+        if name_upper in _WODBUSTER_CLASS_COLOR_BY_NAME:
+            return _WODBUSTER_CLASS_COLOR_BY_NAME[name_upper]
+        for known_name, color in _WODBUSTER_CLASS_COLOR_BY_NAME.items():
+            if known_name in name_upper:
+                return color
+    if class_type_id and class_type_id in _WODBUSTER_CLASS_COLOR_BY_ID:
+        return _WODBUSTER_CLASS_COLOR_BY_ID[class_type_id]
+    return '#64748b'
+
+
+def resolve_booking_class_badges(bookings, user, now_dt: Optional[datetime] = None):
+    """
+    Resolve class badge for each booking according to the 3 temporal rules:
+    - Rule 1 (Upcoming this week): If class has NOT passed, show current week class.
+    - Rule 2 (Completed this week, next week not available): If class has passed,
+      but next week schedule is not available, STILL show current week class.
+    - Rule 3 (Completed this week, next week IS available): If class has passed
+      and next week schedule is available, show next week class.
+    """
+    if not bookings or not user or not getattr(user, 'id', None):
+        return
+
+    if now_dt is None:
+        now_dt = datetime.now(_MADRID_TZ)
+    elif now_dt.tzinfo is None:
+        now_dt = _MADRID_TZ.localize(now_dt)
+
+    today = now_dt.date()
+    monday = today - timedelta(days=today.weekday())
+
+    # Pre-fetch synced schedules for current week and next week (and week after next)
+    schedules = db.session.query(WodBusterClassSchedule).filter(
+        WodBusterClassSchedule.user_id == user.id,
+        WodBusterClassSchedule.class_date >= monday,
+        WodBusterClassSchedule.class_date <= monday + timedelta(days=21),
+    ).all()
+
+    schedules_by_date_time = defaultdict(list)
+    for s in schedules:
+        schedules_by_date_time[(s.class_date, s.class_time)].append(s)
+
+    def _find_matching(target_date, b_time, b_type_class):
+        candidates = schedules_by_date_time.get((target_date, b_time), [])
+        if not candidates:
+            return None
+        # 1. Exact match on class_type (0=wod/regular, 1=openbox)
+        for c in candidates:
+            if c.class_type == b_type_class:
+                return c
+        # 2. Match based on name / class_type_id
+        if b_type_class == 0:
+            for c in candidates:
+                if c.class_type_id not in [2, 7] and 'open box' not in (c.class_name or '').lower():
+                    return c
+        elif b_type_class == 1:
+            for c in candidates:
+                if c.class_type_id in [2, 7] or 'open box' in (c.class_name or '').lower():
+                    return c
+        return candidates[0]
+
+    for b in bookings:
+        b.class_badge = None
+        current_week_date = monday + timedelta(days=b.dow)
+        next_week_date = current_week_date + timedelta(days=7)
+
+        class_dt_current = _MADRID_TZ.localize(datetime.combine(current_week_date, b.time))
+        has_passed = now_dt >= class_dt_current
+
+        current_class = _find_matching(current_week_date, b.time, b.type_class)
+        next_class = _find_matching(next_week_date, b.time, b.type_class)
+
+        chosen = None
+        state = None
+        subtext = None
+
+        if not has_passed:
+            # Rule 1: Current week available class
+            if current_class:
+                chosen = current_class
+                state = 'upcoming'
+                subtext = None
+        else:
+            # Class has passed
+            if next_class:
+                # Rule 3: Next week available class
+                chosen = next_class
+                state = 'next_week'
+                subtext = 'Próx. semana'
+            elif current_class:
+                # Rule 2: Current week available class (next week not yet available)
+                chosen = current_class
+                state = 'completed'
+                subtext = 'Esta semana'
+
+        if chosen:
+            color = _get_class_badge_color(chosen.class_name, chosen.class_type_id)
+            b.class_badge = {
+                'name': chosen.class_name,
+                'color': color,
+                'state': state,
+                'subtext_label': subtext,
+                'date': chosen.class_date,
+            }
+
 
 
 def _wodbuster_booking_display_name(booking) -> str:

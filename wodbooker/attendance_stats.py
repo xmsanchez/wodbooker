@@ -37,11 +37,13 @@ _EMPTY_MONTHS_TO_STOP = 2
 
 
 def sync_wodbuster_all(user: User, box_url: Optional[str] = None) -> dict:
-    from .booker import sync_wodbuster_bookings
+    from .booker import sync_wodbuster_bookings, sync_weekly_classes
 
     bookings = sync_wodbuster_bookings(user)
+    weekly_classes = sync_weekly_classes(user, box_url=box_url)
     attendance = sync_attendance_stats(user, box_url=box_url, backfill_limit=_AUTOSYNC_BACKFILL_MONTHS)
     bookings['attendance'] = attendance
+    bookings['weekly_classes'] = weekly_classes
     return bookings
 
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, date, time
+from typing import Optional
 from abc import ABC, abstractmethod
 import random
 import logging
@@ -20,7 +21,7 @@ from .push_notifications import send_booking_status_notification
 from .exceptions import BookingNotAvailable, InvalidWodBusterResponse, \
     ClassIsFull, LoginError, PasswordRequired, InvalidBox, \
     ClassNotFound, BookingFailed, BookingPenalization, BookingLockedException
-from .models import db, Booking, Event, User, WodBusterBooking, ClassTrainingDescription
+from .models import db, Booking, Event, User, WodBusterBooking, ClassTrainingDescription, WodBusterClassSchedule
 from .db_path import db_commit_with_retry
 import re
 
@@ -547,6 +548,9 @@ def start_booking_loop(booking: Booking) -> None:
     :param offset: The offset from today to book
     :param availabe_at: The time when the booking is available
     """
+    if os.environ.get('DISABLE_BOOKING_LOOP'):
+        return
+
     # Check whitelist if it's configured
     if WHITELIST_EMAILS and booking.user.email not in WHITELIST_EMAILS:
         high_level_logger.warning("Booking attempt blocked: User %s is not in the whitelist. Whitelist contains: %s", 
@@ -925,3 +929,111 @@ def sync_wodbuster_bookings(user: User) -> dict:
             'cancelled': 0,
             'errors': [f'Sync failed: {str(e)}']
         }
+
+
+def sync_weekly_classes(user: User, box_url: Optional[str] = None) -> dict:
+    """
+    Sync WodBuster weekly class schedule for the current week and next week (14 days)
+    and cache in WodBusterClassSchedule table.
+    :param user: The user to sync classes for
+    :param box_url: Optional box URL (resolved if None)
+    :return: Dictionary with sync results: {'success': bool, 'synced': int, 'errors': list}
+    """
+    if not box_url:
+        last_booking = db.session.query(Booking).filter_by(user_id=user.id).order_by(Booking.id.desc()).first()
+        if last_booking and last_booking.url:
+            box_url = last_booking.url
+        else:
+            try:
+                scraper = get_scraper(user.email, user.cookie)
+                box_url = scraper.get_box_url()
+            except Exception as e:
+                logging.warning("Could not get box URL for user %s: %s", user.email, str(e))
+                return {'success': False, 'synced': 0, 'errors': [f'Could not get box URL: {str(e)}']}
+
+    if not box_url:
+        return {'success': False, 'synced': 0, 'errors': ['No box URL available']}
+
+    try:
+        scraper = get_scraper(user.email, user.cookie)
+        today = datetime.now(_MADRID_TZ).date()
+        # Monday of current week
+        monday = today - timedelta(days=today.weekday())
+
+        athlete_id = user.athlete_id if user.athlete_id else None
+        # On weekends, fetch 21 days from current Monday to cover both upcoming weeks
+        days_to_fetch = 21 if today.weekday() >= 5 else 14
+        week_classes = scraper.get_week_classes(box_url, monday, athlete_id, days=days_to_fetch)
+
+        total_synced = 0
+        for current_date, classes_for_day in week_classes.items():
+            existing_by_wb_id = {}
+            existing_by_time_type = {}
+            for schedule_row in db.session.query(WodBusterClassSchedule).filter_by(
+                user_id=user.id,
+                class_date=current_date,
+            ).all():
+                if schedule_row.wodbuster_class_id is not None:
+                    existing_by_wb_id[schedule_row.wodbuster_class_id] = schedule_row
+                existing_by_time_type[(schedule_row.class_time, schedule_row.class_type)] = schedule_row
+
+            for cls in classes_for_day:
+                hora_str = cls.get('Hora', '')
+                try:
+                    time_parts = hora_str.split(':')
+                    class_time = time(int(time_parts[0]), int(time_parts[1]), int(time_parts[2]) if len(time_parts) > 2 else 0)
+                except (ValueError, IndexError):
+                    continue
+
+                wb_class_id = cls.get('Id')
+                class_name = cls.get('NombreE') or 'Clase'
+                class_type = cls.get('class_type', 0)
+                class_type_id = cls.get('IdE')
+
+                existing = None
+                if wb_class_id is not None and wb_class_id in existing_by_wb_id:
+                    existing = existing_by_wb_id[wb_class_id]
+                elif (class_time, class_type) in existing_by_time_type:
+                    existing = existing_by_time_type[(class_time, class_type)]
+
+                if existing:
+                    existing.class_time = class_time
+                    existing.class_name = class_name
+                    existing.class_type = class_type
+                    existing.class_type_id = class_type_id
+                    existing.wodbuster_class_id = wb_class_id
+                    existing.box_url = box_url
+                    existing.fetched_at = datetime.now()
+                else:
+                    new_schedule = WodBusterClassSchedule(
+                        user_id=user.id,
+                        box_url=box_url,
+                        class_date=current_date,
+                        class_time=class_time,
+                        class_name=class_name,
+                        class_type=class_type,
+                        class_type_id=class_type_id,
+                        wodbuster_class_id=wb_class_id,
+                        fetched_at=datetime.now(),
+                    )
+                    db.session.add(new_schedule)
+                    if wb_class_id is not None:
+                        existing_by_wb_id[wb_class_id] = new_schedule
+                    existing_by_time_type[(class_time, class_type)] = new_schedule
+                total_synced += 1
+
+        # Delete older records prior to current week Monday
+        db.session.query(WodBusterClassSchedule).filter(
+            WodBusterClassSchedule.user_id == user.id,
+            WodBusterClassSchedule.class_date < monday,
+        ).delete(synchronize_session=False)
+
+        db_commit_with_retry(db.session)
+        logging.info("Synced %d weekly class slots for user %s", total_synced, user.email)
+        return {'success': True, 'synced': total_synced, 'errors': []}
+
+    except Exception as e:
+        logging.exception("Error syncing weekly classes for user %s", user.email)
+        db.session.rollback()
+        return {'success': False, 'synced': 0, 'errors': [f'Weekly classes sync failed: {str(e)}']}
+
