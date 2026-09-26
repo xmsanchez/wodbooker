@@ -27,6 +27,7 @@
 </style>
 {% endblock %}
 {% block model_menu_bar %}
+<div id="bookingAlertsContainer">
 {% set error_ns = namespace(error=False) %}
 {% for row in data %}
 {% if row['is_active'] and not row['is_thread_active'] %}
@@ -42,6 +43,7 @@
     vuelve a activarla.</p>
 </div>
 {% endif %}
+</div>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div class="d-flex align-items-center">
     {% if current_user.profile_picture_url %}
@@ -79,6 +81,7 @@
     </a>
   </div>
 </div>
+<div id="bookingDynamicMenuBar">
 {% if current_user.athlete_id and attendance_dashboard %}
 <div class="card mb-3" id="attendanceSummaryCard">
   <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;"
@@ -189,8 +192,10 @@
   </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}
 {% block model_list_table %}
+<div id="bookingDynamicListTable">
 {% if not data %}
 <div class="alert alert-info" role="alert">
   <i class="bi bi-info-square"></i> Aún no tienes reservas creadas. Crea tu primera reserva <a
@@ -454,6 +459,7 @@
   </div>
 </div>
 {% endif %}
+</div>
 
 <!-- Auto-sync loading indicator -->
 <div id="autosync-loading" style="display: none; text-align: center; padding: 10px;">
@@ -531,6 +537,19 @@
     font-size: 1.1rem;
     line-height: 1;
   }
+
+  .dynamic-content-updated {
+    animation: dynamicContentFade 0.5s ease-out;
+  }
+
+  @keyframes dynamicContentFade {
+    0% {
+      opacity: 0.7;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
 </style>
 
 <script>
@@ -577,24 +596,28 @@
     }
   })();
 
-  // Show spinner when manual Sync WodBuster is submitted
+  // Handle manual Sync WodBuster via AutoSync AJAX
   (function () {
     var form = document.getElementById('syncWodBusterForm');
     if (form) {
       form.addEventListener('submit', function (event) {
         event.preventDefault();
-        var btn = document.getElementById('syncWodBusterBtn');
-        if (btn) {
-          btn.disabled = true;
-          btn.innerHTML = '<i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite; display: inline-block;"></i> Sincronizando...';
+        if (window.AutoSync && typeof window.AutoSync.sync === 'function') {
+          window.AutoSync.sync();
+        } else {
+          var btn = document.getElementById('syncWodBusterBtn');
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite; display: inline-block;"></i> Sincronizando...';
+          }
+          var loading = document.getElementById('autosync-loading');
+          if (loading) loading.style.display = 'block';
+          window.requestAnimationFrame(function () {
+            setTimeout(function () {
+              form.submit();
+            }, 30);
+          });
         }
-        var loading = document.getElementById('autosync-loading');
-        if (loading) loading.style.display = 'block';
-        window.requestAnimationFrame(function () {
-          setTimeout(function () {
-            form.submit();
-          }, 30);
-        });
       });
     }
   })();

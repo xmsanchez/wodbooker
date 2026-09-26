@@ -6,7 +6,8 @@
     
     // Check if we're on the booking list page
     function isBookingListPage() {
-        return window.location.pathname.includes('/booking/') || 
+        return !!document.getElementById('bookingDynamicListTable') ||
+               window.location.pathname.includes('/booking/') || 
                window.location.pathname === '/' ||
                window.location.pathname === '/booking';
     }
@@ -19,6 +20,15 @@
         
         isSyncing = true;
         
+        // Show loading state on manual sync button if present
+        const syncBtn = document.getElementById('syncWodBusterBtn');
+        let originalBtnHtml = '';
+        if (syncBtn) {
+            syncBtn.disabled = true;
+            originalBtnHtml = syncBtn.innerHTML;
+            syncBtn.innerHTML = '<i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite; display: inline-block;"></i> Sincronizando...';
+        }
+
         // Show loading indicator
         const loadingIndicator = document.getElementById('autosync-loading');
         if (loadingIndicator) {
@@ -52,28 +62,28 @@
             
             const data = await response.json();
             
-            // Hide loading indicator
-            if (loadingIndicator) {
-                loadingIndicator.style.display = 'none';
-            }
-            
-            // Show result message
+            // Show result message and refresh dynamic content
             if (data.success) {
                 showSyncMessage(data.message, 'success');
-                refreshAttendanceDashboard();
+                await refreshBookingPageContent();
             } else {
                 showSyncMessage('Error: ' + (data.error || 'Error desconocido'), 'error');
             }
         } catch (error) {
             console.error('Error syncing WodBuster bookings:', error);
-            
-            // Hide loading indicator
+            showSyncMessage('Error al sincronizar: ' + error.message, 'error');
+        } finally {
             if (loadingIndicator) {
                 loadingIndicator.style.display = 'none';
             }
-            
-            showSyncMessage('Error al sincronizar: ' + error.message, 'error');
-        } finally {
+            if (syncBtn) {
+                syncBtn.disabled = false;
+                if (originalBtnHtml) {
+                    syncBtn.innerHTML = originalBtnHtml;
+                } else {
+                    syncBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Sync WodBuster';
+                }
+            }
             isSyncing = false;
         }
     }
@@ -88,6 +98,94 @@
         console.warn('Sync message:', message);
     }
     
+    // Dynamically refresh booking page content via AJAX DOM swap
+    async function refreshBookingPageContent() {
+        const dynamicListTable = document.getElementById('bookingDynamicListTable');
+        const dynamicMenuBar = document.getElementById('bookingDynamicMenuBar');
+        const alertsContainer = document.getElementById('bookingAlertsContainer');
+
+        if (!dynamicListTable && !dynamicMenuBar) {
+            // Fallback for pages where full booking containers aren't present
+            return refreshAttendanceDashboard();
+        }
+
+        try {
+            const fetchUrl = new URL(window.location.href);
+            fetchUrl.searchParams.set('_t', Date.now().toString());
+
+            const response = await fetch(fetchUrl.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+
+            if (!response.ok) {
+                console.error('Failed to fetch updated page content:', response.status);
+                return refreshAttendanceDashboard();
+            }
+
+            const htmlText = await response.text();
+            const parser = new DOMParser();
+            const newDoc = parser.parseFromString(htmlText, 'text/html');
+
+            // Preserve IDs of open collapse panels across the document
+            const openCollapseIds = new Set();
+            document.querySelectorAll('.collapse.show').forEach(el => {
+                if (el.id) openCollapseIds.add(el.id);
+            });
+
+            function restoreCollapseState(container) {
+                if (!container) return;
+                container.querySelectorAll('.collapse').forEach(el => {
+                    if (openCollapseIds.has(el.id)) {
+                        el.classList.add('show');
+                    }
+                });
+                container.querySelectorAll('[data-toggle="collapse"]').forEach(trigger => {
+                    const target = trigger.getAttribute('data-target') || trigger.getAttribute('href');
+                    if (target && target.startsWith('#')) {
+                        const id = target.substring(1);
+                        if (openCollapseIds.has(id)) {
+                            trigger.setAttribute('aria-expanded', 'true');
+                            trigger.classList.remove('collapsed');
+                        }
+                    }
+                });
+            }
+
+            const containers = [
+                { id: 'bookingAlertsContainer', current: alertsContainer },
+                { id: 'bookingDynamicMenuBar', current: dynamicMenuBar },
+                { id: 'bookingDynamicListTable', current: dynamicListTable }
+            ];
+
+            for (const item of containers) {
+                const currentEl = item.current || document.getElementById(item.id);
+                const newEl = newDoc.getElementById(item.id);
+                if (currentEl && newEl) {
+                    restoreCollapseState(newEl);
+                    currentEl.innerHTML = newEl.innerHTML;
+
+                    currentEl.classList.remove('dynamic-content-updated');
+                    void currentEl.offsetWidth; // Force reflow for CSS animation
+                    currentEl.classList.add('dynamic-content-updated');
+                }
+            }
+
+            // Re-initialize Bootstrap tooltips for new elements
+            if (window.jQuery && typeof window.jQuery.fn.tooltip === 'function') {
+                window.jQuery('.tooltip').remove();
+                window.jQuery('[data-toggle="tooltip"]').tooltip({ container: 'body' });
+            }
+
+            return true;
+        } catch (e) {
+            console.error('Error refreshing booking page content:', e);
+            return refreshAttendanceDashboard();
+        }
+    }
+
     async function refreshAttendanceDashboard() {
         const card = document.getElementById('attendanceSummaryCard');
         if (!card) return;

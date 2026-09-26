@@ -57,38 +57,43 @@
         }
     }
 
-    const backfillBtn = document.getElementById('attendanceBackfillBtn');
-    const statusEl = document.getElementById('attendanceBackfillStatus');
-    if (backfillBtn) {
-        backfillBtn.addEventListener('click', () => runBackfill(statusEl, backfillBtn));
-    }
+    // Use event delegation so handlers persist across dynamic DOM updates
+    document.addEventListener('click', function (e) {
+        const backfillBtn = e.target.closest('#attendanceBackfillBtn');
+        if (backfillBtn) {
+            const statusEl = document.getElementById('attendanceBackfillStatus');
+            runBackfill(statusEl, backfillBtn);
+            return;
+        }
 
-    const regenBtn = document.getElementById('regenerateHistoryBtn');
-    if (regenBtn) {
-        regenBtn.addEventListener('click', async () => {
-            if (!confirm(
-                '¿Borrar el historial almacenado y volver a sincronizar desde WodBuster? '
-                + 'No afecta tus reservas en WodBuster.'
-            )) {
-                return;
-            }
-            regenBtn.disabled = true;
-            setSpinner(regenBtn, true);
-            if (statusEl) statusEl.textContent = 'Regenerando historial…';
-            await nextPaint();
-            try {
-                await fetch('/api/attendance/regenerate-history', {
-                    method: 'POST',
-                    headers: csrfHeaders(),
-                });
-                setSpinner(regenBtn, false);
-                await runBackfill(statusEl, null);
-            } catch (e) {
-                alert('Error: ' + e.message);
-            } finally {
-                setSpinner(regenBtn, false);
-                regenBtn.disabled = false;
-            }
-        });
-    }
+        const regenBtn = e.target.closest('#regenerateHistoryBtn');
+        if (regenBtn) {
+            (async function () {
+                if (!confirm(
+                    '¿Borrar el historial almacenado y volver a sincronizar desde WodBuster? '
+                    + 'No afecta tus reservas en WodBuster.'
+                )) {
+                    return;
+                }
+                const statusEl = document.getElementById('attendanceBackfillStatus');
+                regenBtn.disabled = true;
+                setSpinner(regenBtn, true);
+                if (statusEl) statusEl.textContent = 'Regenerando historial…';
+                await nextPaint();
+                try {
+                    await fetch('/api/attendance/regenerate-history', {
+                        method: 'POST',
+                        headers: csrfHeaders(),
+                    });
+                    setSpinner(regenBtn, false);
+                    await runBackfill(statusEl, null);
+                } catch (err) {
+                    alert('Error: ' + err.message);
+                } finally {
+                    setSpinner(regenBtn, false);
+                    regenBtn.disabled = false;
+                }
+            })();
+        }
+    });
 })();
