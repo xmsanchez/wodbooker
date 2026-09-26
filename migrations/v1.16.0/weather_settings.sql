@@ -1,0 +1,4 @@
+ALTER TABLE user ADD COLUMN weather_enabled BOOLEAN DEFAULT 1;
+ALTER TABLE user ADD COLUMN weather_city VARCHAR(128);
+ALTER TABLE user ADD COLUMN weather_lat FLOAT;
+ALTER TABLE user ADD COLUMN weather_lon FLOAT;

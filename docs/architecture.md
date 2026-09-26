@@ -83,7 +83,7 @@ erDiagram
 
 | Model | Table | Purpose |
 |-------|-------|---------|
-| `User` | `user` | Auth, cookies, notification/sync preferences, cancel-window autobook settings (`cancel_window_hours`, `stop_autobook_in_cancel_window`) |
+| `User` | `user` | Auth, cookies, notification/sync preferences, cancel-window autobook settings, weather forecast settings (`weather_enabled`, `weather_city`, `weather_lat`, `weather_lon`) |
 | `Booking` | `booking` | Recurring auto-book rule (dow, time, url, offset, available_at); optional `book_despite_cancel_window` override |
 | `Event` | `event` | Per-booking audit log |
 | `WodBusterBooking` | `wodbuster_booking` | Synced real bookings from WodBuster API |
@@ -92,6 +92,8 @@ erDiagram
 | `ClassTrainingDescription` | `class_training_description` | Cached WOD board text |
 | `AthleteMonthlyStats` | `athlete_monthly_stats` | Calendar-month attendance cache |
 | `WodBusterClassSchedule` | `wodbuster_class_schedule` | Cached 14-day weekly class schedule (v1.15.0) |
+
+`User.weather_enabled` / `weather_city` / `weather_lat` / `weather_lon` (v1.16.0): displays weather forecast widget for the scheduled class day (this week or next week) using Open-Meteo API (`wodbooker/weather.py`). Rollback: `migrations/v1.16.0/rollback_weather_settings.sql`.
 
 `WodBusterClassSchedule` (v1.15.0): caches 14-day weekly class schedules per user/box to display class badges on booking cards without external HTTP calls. Rollback: `migrations/v1.15.0/rollback_wodbuster_class_schedule.sql`.
 

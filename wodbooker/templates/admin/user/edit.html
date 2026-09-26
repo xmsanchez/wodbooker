@@ -279,6 +279,46 @@
           </div>
         </div>
       </div>
+
+      <!-- Previsión meteorológica -->
+      <div class="card mb-3" style="border-left: 4px solid #0284c7;">
+        <div class="card-header" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);">
+          <h6 class="mb-0"><i class="bi bi-cloud-sun me-2"></i> Previsión meteorológica</h6>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <div class="form-check form-switch">
+              {{ form.weather_enabled(class="form-check-input", id="weather-enabled-toggle") }}
+              <label class="form-check-label" for="weather-enabled-toggle">
+                {{ form.weather_enabled.label.text }}
+              </label>
+            </div>
+            {% if form.weather_enabled.errors %}
+              <div class="text-danger">
+                {% for error in form.weather_enabled.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="form-group mt-3" id="weather-city-wrapper">
+            <label class="form-label" for="{{ form.weather_city.id }}">
+              {{ form.weather_city.label.text }}
+            </label>
+            {{ form.weather_city(class="form-control", placeholder="Ej: Corbera de Llobregat, Barcelona, Madrid...", style="max-width: 25rem;") }}
+            {% if form.weather_city.description %}
+              <small class="form-text text-muted">{{ form.weather_city.description }}</small>
+            {% endif %}
+            {% if form.weather_city.errors %}
+              <div class="text-danger">
+                {% for error in form.weather_city.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
     </div>
     
     {{ lib.render_form_buttons(return_url) }}
@@ -299,6 +339,16 @@
 
       toggle.addEventListener('change', toggleWrapper);
       toggleWrapper(); // Initial check
+
+      const weatherToggle = document.getElementById('weather-enabled-toggle');
+      const weatherCityWrapper = document.getElementById('weather-city-wrapper');
+      if (weatherToggle && weatherCityWrapper) {
+        function toggleWeatherWrapper() {
+          weatherCityWrapper.style.display = weatherToggle.checked ? 'block' : 'none';
+        }
+        weatherToggle.addEventListener('change', toggleWeatherWrapper);
+        toggleWeatherWrapper();
+      }
     });
 
     (async function() {

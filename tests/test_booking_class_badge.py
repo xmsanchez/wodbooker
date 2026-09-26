@@ -286,6 +286,58 @@ class BookingClassBadgeTests(unittest.TestCase):
         self.assertEqual(b_openbox.class_badge['name'], 'Open box*')
         self.assertEqual(b_openbox.class_badge['color'], '#000000')
 
+    @patch('wodbooker.views.db.session.query')
+    def test_weekday_is_next_week_detection(self, mock_query):
+        """Test that next_week state is detected for weekday headers."""
+        user = MagicMock()
+        user.id = 1
+
+        b_mon = MagicMock()
+        b_mon.dow = 0
+        b_mon.time = time(16, 30)
+        b_mon.type_class = 0
+
+        b_wed = MagicMock()
+        b_wed.dow = 2
+        b_wed.time = time(18, 0)
+        b_wed.type_class = 0
+
+        next_monday = date(2026, 9, 14)
+        current_wednesday = date(2026, 9, 9)
+
+        sched_mon = WodBusterClassSchedule(
+            user_id=1,
+            box_url="https://box.wodbuster.com",
+            class_date=next_monday,
+            class_time=time(16, 30),
+            class_name="Gymnastics",
+            class_type=0,
+            class_type_id=9,
+            wodbuster_class_id=102,
+        )
+        sched_wed = WodBusterClassSchedule(
+            user_id=1,
+            box_url="https://box.wodbuster.com",
+            class_date=current_wednesday,
+            class_time=time(18, 0),
+            class_name="WOD",
+            class_type=0,
+            class_type_id=1,
+            wodbuster_class_id=103,
+        )
+
+        query_mock = MagicMock()
+        query_mock.filter.return_value.all.return_value = [sched_mon, sched_wed]
+        mock_query.return_value = query_mock
+
+        # Tuesday 2026-09-08: Monday passed, Wednesday upcoming
+        now_dt = _MADRID_TZ.localize(datetime(2026, 9, 8, 12, 0))
+
+        resolve_booking_class_badges([b_mon, b_wed], user, now_dt=now_dt)
+
+        self.assertEqual(b_mon.class_badge['state'], 'next_week')
+        self.assertEqual(b_wed.class_badge['state'], 'upcoming')
+
     @patch('wodbooker.booker.db_commit_with_retry')
     @patch('wodbooker.booker.db.session')
     @patch('wodbooker.booker.get_scraper')
