@@ -29,6 +29,13 @@ from .training_description_html import (
     description_is_html,
     extract_board_title,
 )
+from .weather import (
+    resolve_booking_weather,
+    resolve_wodbuster_bookings_weather,
+    resolve_weekday_weather,
+    resolve_wodbuster_date_weather,
+    geocode_location,
+)
 import pytz
 
 # Training description logger (file-only, no console)
@@ -373,11 +380,19 @@ class BookingAdmin(sqla.ModelView):
 
         if login.current_user.is_authenticated and data:
             resolve_booking_class_badges(data, login.current_user)
+            resolve_booking_weather(data, login.current_user)
+            self._weekday_weather = resolve_weekday_weather(data, login.current_user)
+        else:
+            self._weekday_weather = {}
+            self._weekday_is_next_week = {}
         
-        # Calculate statistics for each weekday
+        # Calculate statistics and next_week indicator for each weekday
         weekday_stats = defaultdict(lambda: {'successful': 0, 'waiting': 0, 'errors': 0})
+        weekday_is_next_week = defaultdict(bool)
         for obj in data:
             dow = obj.dow
+            if getattr(obj, 'class_badge', None) and obj.class_badge.get('state') == 'next_week':
+                weekday_is_next_week[dow] = True
             if obj.last_events:
                 # Check the latest event(s) to determine status
                 # last_events is a list of Event objects, each with an 'event' string attribute
@@ -400,14 +415,18 @@ class BookingAdmin(sqla.ModelView):
                         weekday_stats[dow]['errors'] += 1
                         break
         
-        # Store statistics in a way that can be accessed in template
+        # Store statistics and next_week indicator in a way that can be accessed in template
         self._weekday_stats = dict(weekday_stats)
+        self._weekday_is_next_week = dict(weekday_is_next_week)
         return count, data
     
     def render(self, template, **kwargs):
         # Pass DAYS_OF_WEEK and weekday statistics to template context
         kwargs['DAYS_OF_WEEK'] = DAYS_OF_WEEK
         kwargs['weekday_stats'] = getattr(self, '_weekday_stats', {})
+        kwargs['weekday_is_next_week'] = getattr(self, '_weekday_is_next_week', {})
+        kwargs['weekday_weather'] = getattr(self, '_weekday_weather', {})
+        kwargs['wb_date_weather'] = {}
         
         wodbuster_bookings = []
         madrid_today = None
@@ -422,6 +441,9 @@ class BookingAdmin(sqla.ModelView):
                 friendly_name = _wodbuster_booking_display_name(booking)
                 booking.badge_name = friendly_name
                 booking.badge_color = _wodbuster_booking_badge_color(booking, friendly_name)
+            if bookings:
+                resolve_wodbuster_bookings_weather(bookings, login.current_user)
+                kwargs['wb_date_weather'] = resolve_wodbuster_date_weather(bookings, login.current_user)
             wodbuster_bookings = bookings
         
         kwargs['wodbuster_bookings'] = wodbuster_bookings
@@ -672,6 +694,15 @@ class UserForm(FlaskForm):
     stop_autobook_in_cancel_window = fields.BooleanField(
         'Detener autoreserva para las clases que se encuentren dentro de la ventana',
     )
+    weather_enabled = fields.BooleanField(
+        'Mostrar previsión meteorológica en las reservas',
+        default=True,
+    )
+    weather_city = fields.StringField(
+        'Ciudad o ubicación del Box',
+        validators=[validators.Optional(), validators.Length(max=128)],
+        description='Si se deja en blanco, se intentará deducir automáticamente a partir del box de tus reservas.',
+    )
 
 
 class UserView(sqla.ModelView):
@@ -709,6 +740,20 @@ class UserView(sqla.ModelView):
         if login.current_user.is_authenticated and model.id != login.current_user.id:
             flash("No estás autorizado a editar este elemento", "warning")
             return False
+
+        if form.weather_city.data and form.weather_city.data.strip():
+            city = form.weather_city.data.strip()
+            if city != model.weather_city or model.weather_lat is None:
+                geocoded = geocode_location(city)
+                if geocoded:
+                    model.weather_city = geocoded[2]
+                    model.weather_lat = geocoded[0]
+                    model.weather_lon = geocoded[1]
+                else:
+                    flash(f"No se pudieron encontrar coordenadas para '{city}'. Se usará la ubicación por defecto.", "warning")
+        elif not form.weather_city.data:
+            model.weather_lat = None
+            model.weather_lon = None
 
         return super().update_model(form, model)
 

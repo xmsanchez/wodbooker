@@ -57,6 +57,10 @@ class User(db.Model):
     attendance_history_from = db.Column(db.Date, nullable=True)
     cancel_window_hours = db.Column(db.Integer, default=3, nullable=False)
     stop_autobook_in_cancel_window = db.Column(db.Boolean, default=False, nullable=False)
+    weather_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    weather_city = db.Column(db.String(128), nullable=True)
+    weather_lat = db.Column(db.Float, nullable=True)
+    weather_lon = db.Column(db.Float, nullable=True)
 
     # Push notification subscriptions
     push_subscriptions = db.relationship('PushSubscription', backref='user', lazy=True, cascade="all, delete-orphan")

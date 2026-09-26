@@ -129,5 +129,24 @@
       {% endif %}
     </div>
   </div>
+
+  <!-- Previsión meteorológica -->
+  <div class="card mb-3 compact-card" style="border-left: 4px solid #0284c7;">
+    <div class="card-header" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);">
+      <h6 class="mb-0"><i class="bi bi-cloud-sun me-2"></i> Previsión meteorológica</h6>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        <strong>Mostrar previsión del tiempo:</strong>
+        {{ "Sí" if data[0].weather_enabled else "No" }}
+      </p>
+      {% if data[0].weather_enabled %}
+      <p class="mb-0">
+        <strong>Ubicación configurada:</strong>
+        {{ data[0].weather_city if data[0].weather_city else "Detección automática por box" }}
+      </p>
+      {% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}

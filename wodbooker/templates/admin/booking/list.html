@@ -8,11 +8,21 @@
   }
 
   .class-badge-next-week {
-    font-size: 0.65rem !important;
-    padding: 0.15rem 0.35rem !important;
-    margin-left: 0.25rem !important;
+    font-size: 0.75rem !important;
+    padding: 0.18rem 0.45rem !important;
+    margin-left: 0.4rem !important;
     font-weight: 500 !important;
     vertical-align: middle !important;
+  }
+
+  .weather-header-link {
+    text-decoration: none !important;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .weather-header-link:hover {
+    opacity: 0.75;
+    text-decoration: none !important;
   }
 </style>
 {% endblock %}
@@ -194,23 +204,50 @@
   {% if weekday_ns.current != row_weekday_dow %}
   {% set weekday_ns.current = row_weekday_dow %}
   {% set stats = weekday_stats.get(row_weekday_dow) or {'successful': 0, 'waiting': 0, 'errors': 0} %}
-  <div class="weekday-header"
+  <div class="weekday-header d-flex justify-content-between align-items-center"
     style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #475569; font-size: 1rem;">
-    <span>{{ DAYS_OF_WEEK[row_weekday_dow] }}</span>
-    {% if stats['successful'] > 0 or stats['waiting'] > 0 or stats['errors'] > 0 %}
-    <span style="font-size: 0.875rem; font-weight: 400; margin-left: 0.75rem;">
-      {% if stats['successful'] > 0 %}
-      <span style="color: #059669;">Reservadas {{ stats['successful'] }}</span>
+    <div>
+      <span>{{ DAYS_OF_WEEK[row_weekday_dow] }}</span>
+      {% if weekday_is_next_week and weekday_is_next_week.get(row_weekday_dow) %}
+      <span class="badge badge-light border text-muted class-badge-next-week" title="Horarios de la próxima semana">Próx</span>
       {% endif %}
-      {% if stats['waiting'] > 0 %}
-      {% if stats['successful'] > 0 %} / {% endif %}
-      <span style="color: #f59e0b;">Clase llena {{ stats['waiting'] }}</span>
+      {% if stats['successful'] > 0 or stats['waiting'] > 0 or stats['errors'] > 0 %}
+      <span style="font-size: 0.875rem; font-weight: 400; margin-left: 0.75rem;">
+        {% if stats['successful'] > 0 %}
+        <span style="color: #059669;">Reservadas {{ stats['successful'] }}</span>
+        {% endif %}
+        {% if stats['waiting'] > 0 %}
+        {% if stats['successful'] > 0 %} / {% endif %}
+        <span style="color: #f59e0b;">Clase llena {{ stats['waiting'] }}</span>
+        {% endif %}
+        {% if stats['errors'] > 0 %}
+        {% if stats['successful'] > 0 or stats['waiting'] > 0 %} / {% endif %}
+        <span style="color: #dc2626;">Errores {{ stats['errors'] }}</span>
+        {% endif %}
+      </span>
       {% endif %}
-      {% if stats['errors'] > 0 %}
-      {% if stats['successful'] > 0 or stats['waiting'] > 0 %} / {% endif %}
-      <span style="color: #dc2626;">Errores {{ stats['errors'] }}</span>
+    </div>
+    {% if weekday_weather and weekday_weather.get(row_weekday_dow) %}
+    {% set w = weekday_weather.get(row_weekday_dow) %}
+    <a href="{{ w.weather_url or '#' }}" target="_blank" rel="noopener noreferrer"
+      class="weather-header-link d-inline-flex align-items-center" data-toggle="tooltip" data-placement="top"
+      title="{{ w.tooltip }} · Ver previsión en nueva ventana"
+      style="font-size: 0.8rem; font-weight: 400; color: #64748b; cursor: pointer; line-height: 1;">
+      <i class="bi {{ w.icon }}" style="color: {{ w.icon_color }}; font-size: 0.95rem; margin-right: 0.25rem;"></i>
+      {% if w.precip_str %}
+      <span style="font-size: 0.75rem; color: {{ w.precip_color or '#94a3b8' }}; margin-right: 0.4rem; font-weight: 500;">
+        {{ w.precip_str }}
+      </span>
       {% endif %}
-    </span>
+      {% if w.temp_max is not none and w.temp_min is not none and w.temp_max != w.temp_min %}
+      <span class="d-inline-flex flex-column text-right" style="font-size: 0.7rem; line-height: 1.05; font-weight: 600;">
+        <span style="color: #334155;">{{ w.temp_max }}°</span>
+        <span style="color: #64748b;">{{ w.temp_min }}°</span>
+      </span>
+      {% else %}
+      <span style="font-size: 0.8rem; font-weight: 500; color: #475569;">{{ w.temp_str }}</span>
+      {% endif %}
+    </a>
     {% endif %}
   </div>
   {% endif %}
@@ -227,9 +264,13 @@
               style="background-color: {{ row.class_badge.color }}; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem; border-radius: 4px; font-weight: 500; vertical-align: middle;">
               {{ row.class_badge.name }}
             </span>
-            {% if row.class_badge.state == 'next_week' %}
-            <span class="badge badge-light border text-muted class-badge-next-week">Próx</span>
             {% endif %}
+            {% if row.weather and row.weather.precip_str %}
+            <span class="font-weight-normal" data-toggle="tooltip" data-placement="top"
+              title="{{ row.weather.rain_tooltip or ('Lluvia prevista: ' ~ row.weather.precip_str) }}"
+              style="color: {{ row.weather.rain_icon_color or '#0284c7' }}; font-size: 0.8rem; margin-left: 0.35rem; vertical-align: middle; cursor: default;">
+              <i class="bi {{ row.weather.rain_icon or 'bi-droplet-fill' }}"></i>{{ row.weather.precip_str }}
+            </span>
             {% endif %}
             {% if row['is_active'] and not row['is_thread_active'] %}
             <i style="color: #ffd241" class="bi bi-exclamation-triangle-fill"></i>
@@ -314,9 +355,31 @@
     {% set wb_dow = wb_date.weekday() %}
     {% if wb_date_ns.current != wb_date %}
     {% set wb_date_ns.current = wb_date %}
-    <div class="weekday-header"
+    <div class="weekday-header d-flex justify-content-between align-items-center"
       style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border: 1px solid #93c5fd; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; margin-top: 0.75rem; font-weight: 600; color: #1e40af; font-size: 1rem;">
       <span>{{ DAYS_OF_WEEK[wb_dow] }} {{ wb_date.strftime('%d/%m/%Y') }}</span>
+      {% if wb_date_weather and wb_date_weather.get(wb_date) %}
+      {% set w = wb_date_weather.get(wb_date) %}
+      <a href="{{ w.weather_url or '#' }}" target="_blank" rel="noopener noreferrer"
+        class="weather-header-link d-inline-flex align-items-center" data-toggle="tooltip" data-placement="top"
+        title="{{ w.tooltip }} · Ver previsión en nueva ventana"
+        style="font-size: 0.8rem; font-weight: 400; color: #3b82f6; cursor: pointer; line-height: 1;">
+        <i class="bi {{ w.icon }}" style="color: {{ w.icon_color }}; font-size: 0.95rem; margin-right: 0.25rem;"></i>
+        {% if w.precip_str %}
+        <span style="font-size: 0.75rem; color: {{ w.precip_color or '#60a5fa' }}; margin-right: 0.4rem; font-weight: 500;">
+          {{ w.precip_str }}
+        </span>
+        {% endif %}
+        {% if w.temp_max is not none and w.temp_min is not none and w.temp_max != w.temp_min %}
+        <span class="d-inline-flex flex-column text-right" style="font-size: 0.7rem; line-height: 1.05; font-weight: 600;">
+          <span style="color: #1e3a8a;">{{ w.temp_max }}°</span>
+          <span style="color: #3b82f6;">{{ w.temp_min }}°</span>
+        </span>
+        {% else %}
+        <span style="font-size: 0.8rem; font-weight: 500; color: #1e40af;">{{ w.temp_str }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
     </div>
     {% endif %}
     {% set is_same_date_as_prev = loop.index0 > 0 and wodbuster_bookings[loop.index0 - 1].class_date == wb_date %}
@@ -334,6 +397,13 @@
                 style="background-color: {{ wb_booking.badge_color or '#3b82f6' }}; color: white; font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-left: 0.5rem; border-radius: 4px; font-weight: 500;">
                 {{ wb_booking.badge_name or wb_booking.class_name or 'N/A' }}
               </span>
+              {% if wb_booking.weather and wb_booking.weather.precip_str %}
+              <span class="font-weight-normal" data-toggle="tooltip" data-placement="top"
+                title="{{ wb_booking.weather.rain_tooltip or ('Lluvia prevista: ' ~ wb_booking.weather.precip_str) }}"
+                style="color: {{ wb_booking.weather.rain_icon_color or '#0284c7' }}; font-size: 0.8rem; margin-left: 0.35rem; vertical-align: middle; cursor: default;">
+                <i class="bi {{ wb_booking.weather.rain_icon or 'bi-droplet-fill' }}"></i>{{ wb_booking.weather.precip_str }}
+              </span>
+              {% endif %}
             </h4>
           </button>
         </h2>
@@ -528,6 +598,10 @@
       });
     }
   })();
+
+  $(function () {
+    $('[data-toggle="tooltip"]').tooltip({ container: 'body' });
+  });
 </script>
 <script src="{{ url_for('static', filename='attendance-backfill.js') }}"></script>
 {% endblock %}
