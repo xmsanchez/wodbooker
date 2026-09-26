@@ -17,7 +17,7 @@ from flask_babel import Babel
 from flask_wtf.csrf import CSRFProtect
 from .views import MyAdminIndexView, BookingAdmin, EventView, UserView
 from .models import User, Booking, Event, db, PushSubscription, WodBusterBooking
-from .booker import start_booking_loop, stop_booking_loop, is_booking_running, _get_next_date_for_weekday, _MADRID_TZ
+from .booker import start_booking_loop, stop_booking_loop, is_booking_running, _get_next_date_for_weekday, _MADRID_TZ, sync_weekly_classes
 from .attendance_stats import (
     sync_wodbuster_all,
     get_attendance_dashboard,
@@ -260,6 +260,11 @@ def _apply_pending_sqlite_migrations(database_path: str) -> None:
             database_path, 'v1.14.0', ['cancel_window_settings.sql'],
         )
 
+    if not _sqlite_has_table(database_path, 'wodbuster_class_schedule'):
+        _run_migration_sql_files(
+            database_path, 'v1.15.0', ['wodbuster_class_schedule.sql'],
+        )
+
 
 # Check and run migrations BEFORE initializing SQLAlchemy to avoid model metadata issues
 if os.path.exists(database_path):
@@ -269,7 +274,7 @@ if os.path.exists(database_path):
     except Exception as e:
         logging.error('Error running pending migrations: %s', e)
         logging.error(
-            'Run manually from repo root: python migrate.py v1.14.0',
+            'Run manually from repo root: python migrate.py v1.15.0',
         )
         raise
 

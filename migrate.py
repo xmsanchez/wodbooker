@@ -33,8 +33,8 @@ def get_migrate_scripts(version):
     if not os.path.exists(migrations_dir):
         return _migrations
 
-    for file in os.listdir(migrations_dir):
-        if file.endswith('.sql'):
+    for file in sorted(os.listdir(migrations_dir)):
+        if file.endswith('.sql') and not file.startswith('rollback'):
             with open(op.join(migrations_dir, file), 'r', encoding='utf-8') as f:
                 _migrations[file] = f.read()
 
